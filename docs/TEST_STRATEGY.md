@@ -1,0 +1,185 @@
+# Stratégie de test
+
+## Pyramide
+
+Cette pyramide couvre la cible des trois portes. La présence d’une rubrique Tone Row, transport ou audio ne signifie pas que sa porte est déjà acceptée.
+
+### Tests domaine — majorité
+
+Rapides, déterministes, sans Android :
+
+- grilles de gamme, wrap/clamp et ancrage hors gamme ;
+- mouvements `-14…+14`, zéro, Home et Undo ;
+- accords, doublures et notes hors plage ;
+- articulations `ARPEGGIATED`/`STACKED`/`MUTED`, projection du voicing et hits de
+  strummer sans mutation de navigation ;
+- symétrie des instances actives ;
+- routage Off/Active/Active Last Note/PassThru ;
+- mapping note/CC et seuil 64 ;
+- Tone Row, unicité, fin automatique et transformations ;
+- transport et Clock 24 PPQ ;
+- sérialisation/migrations via fixtures dans l’app.
+
+### Tests natifs hôte
+
+- oscillateurs et enveloppes ;
+- durées ADSR à 44,1/48/96 kHz, normalisation des mix et transparence du limiteur ;
+- stabilité filtre/effets ;
+- magnitude des all-pass et gain de réverbération normalisé ;
+- absence de NaN/Inf ;
+- file SPSC ;
+- allocation de voix et Panic ;
+- contrat `ParameterId` des 16 paramètres et rejet des identifiants/valeurs invalides ;
+- lissage avec snap des mix d'oscillateurs, pulse width, sustain, coefficients du filtre,
+  effets et master ;
+- cycle open/start/stop/reprise, fallback Exclusive→Shared et ownership des callbacks ;
+- overflow conservateur, générations de stream, drain borné et reset O(1) des effets ;
+- compilation stricte d’`AudioEngine.cpp` et `native_bridge.cpp` contre des stubs hôte étroits.
+
+### Tests Android locaux
+
+- coordinateur pur et contrat de repository MIDI avec faux ports ;
+- parser MIDI fragmenté et messages temps réel imbriqués ;
+- sérialisation versionnée du mapping, de la session et de la banque de presets,
+  migrations, schémas futurs et entrées invalides ;
+- politique Program Change/Song Select, canal, slots absents et PassThru ;
+- calcul d’état UI Tone Row et registre multi-pointeur indépendants de l’appareil.
+- tracker de strummer : crossings intermédiaires, inversion, vélocité, multi-pointeur et
+  hystérésis ;
+- acteur musical hors Main, horloges/gates, fermeture concurrente, persistance confluentée
+  et diagnostics asynchrones avec dispatchers de test séparés ;
+- projections Compose : Note Off, curseurs, console, pads et grille ne changent que leurs
+  modèles de présentation concernés.
+- migrations Settings/Preset v1/v2 vers articulation explicite et banque v1 vers v2 ;
+- coordinateur : pads Tone Row muets en Record/Manual, Auto inchangé et gate strummer
+  ciblée sans dette de release.
+- contrat Kotlin typé `SynthParameter`/`SynthPatch`, bornes `20…20 000 Hz` du cutoff,
+  persistance du patch et ordre wire complet ;
+- rejeu des 16 paramètres lors du retour du stream ou de l'augmentation de `restartCount`
+  sans état arrêté observé, avec Panic/stop si le rejeu est refusé ;
+- projections et contrôles du panneau Synthé, brouillon local, aperçu audio confluent par
+  frame, deltas filaires sans persistance et commit complet en fin de geste.
+
+### Tests instrumentés/appareil
+
+- découverte et hotplug ;
+- multi-touch et lifecycle ;
+- port MIDI réel ;
+- audio Oboe, reprise et session prolongée ;
+- accessibilité et paysage.
+- conservation de la scène pondérée avec une timeline de 1 à 12 éléments ;
+- neuf pads sémantiques distincts, cliquables et mesurés à au moins 72 dp.
+- trois sélecteurs d'articulation et chaque corde du voicing comme cibles accessibles
+  distinctes d'au moins 48 dp.
+- panneau Synthé scrollable, sliders décrits, ordre aperçu puis commit et diagnostics
+  libellé/valeur ;
+- AUDIO-01 : dix cycles start/stop, envoi des 16 paramètres et d'un Panic silencieux,
+  vidage borné de la file et collecte des diagnostics négociés.
+
+Ces tests instrumentés sont requis pour la réception matérielle. Ils ne sont pas remplacés par les tests JVM des mêmes invariants.
+
+## État de preuve — tranche logicielle des portes 2 et 3
+
+- `ToneRowReducerTest` couvre les prises complètes 5/7/12, la fin précoce, la recherche
+  de classe libre, la lecture manuelle, les quatre parcours, les transformations, la
+  séquence éditable et Play Once.
+- `TransportReducerTest` couvre timing interne, 24 PPQ, divisions, Start/Continue/Stop,
+  Pause, changement de source, timestamps et changement de tempo en vol.
+- Les tests du coordinateur couvrent l'ordre des effets et l'ownership commun aux pads,
+  mappings, Tone Row et transport, y compris la libération des voix aux transitions.
+- `MidiMessageParserTest` couvre le byte stream Clock/transport, Program Change et Song
+  Select typé sans casser running status ni les messages fragmentés.
+- `PerformancePresetSerializerTest`, `PerformancePresetAdaptersTest`,
+  `PresetMidiPolicyTest` et `SettingsRepositoryMigrationTest` couvrent round-trip,
+  migration v1→v2, limites de banque, restauration arrêtée et politique de rappel.
+- `ToneRowUiModelTest` couvre les curseurs bornés, statuts, disponibilités et slots de
+  presets sans instrumentation Android.
+- `IntervalTabletViewModelTest` pilote l’acteur avec horloge, stockage, audio et ports
+  injectés : restauration arrêtée, autosauvegarde/rappel, callback interne tardif sans
+  rafale, Program/Song Select avant routage, isolation PassThru et HostStop idempotent.
+- `PadArticulationTest`, `PerformanceCoordinatorTest` et
+  `IntervalTabletViewModelTest` couvrent le lead seul, le voicing plaqué, le pad muet,
+  les doublures, les changements de mode, le strummer one-shot à vélocité pleine et sa
+  release ciblée.
+- `StrummerGestureTrackerTest` couvre les bandes sautées dans les deux sens, les sources
+  indépendantes, la vélocité secondaire et l'hystérésis de frontière.
+- `AudioParametersTest` fixe les 16 identifiants wire, leurs bornes/défauts, l'ordre du
+  patch et la sélection ordonnée des seuls paramètres modifiés ; les tests ViewModel
+  couvrent les aperçus transitoires, le commit, la persistance et le rejeu après recovery.
+- Les tests DSP couvrent la convergence puis le snap exact des paramètres lissés ;
+  `SynthPanelAccessibilityTest` couvre les contrôles, l'ordre aperçu/commit et les
+  diagnostics exposés par Compose.
+
+Le rapport `docs/VERIFICATION_REPORT.md` reste la source du résultat chiffré du dernier
+gate complet. Ces tests JVM exercent directement l’acteur et son ordonnanceur coroutine,
+mais ne remplacent pas une instrumentation de `HandlerThread`, `StateFlow` et lifecycle
+sur Android réel.
+
+Le gate revalidé le 31 août réussit 234/234 tests JVM, soit 94 domaine et 140 application,
+2/2 tests natifs et 6/6 tests instrumentés sur Samsung SM-X620/API 36. AUDIO-01 y réalise
+dix cycles start/stop à 48 kHz, burst 96, buffer 192, profondeur maximale de file 17,
+sans drop, restart, code d'erreur ni xrun. Le gate vérifie aussi que chaque ABI contenant
+`libinterval_audio.so` embarque `liboboe.so` et `libc++_shared.so`.
+
+Cette campagne ne valide pas USB MIDI, Clock physique, Program/Song Select depuis un
+contrôleur, TalkBack, vrai multi-touch, qualité audio subjective, latence loopback, xruns
+sous charge, hotplug audio ni soak audio de 60 minutes. La porte matérielle globale reste
+donc ouverte.
+
+## Mesure de rendu reproductible
+
+La variante minifiée `benchmark` utilise un package isolé et `profileable by shell`. Avant
+chaque passe, le harnais vérifie le SHA-256 de l'APK installé, l'activité au premier plan et
+le taux de rendu actif de 90 Hz. Une passe conserve warm-up, batterie, thermique, dump
+`gfxinfo` brut et résumé versionné ; les conditions audio OFF/ON sont contrebalancées.
+
+`gfxinfo` mesure des délais de frame UI. Il ne mesure jamais une latence toucher→audio,
+une latence MIDI, ni un round-trip matériel. Si le ring `framestats` est tronqué, seuls les
+agrégats plateforme couvrent la fenêtre entière ; les percentiles recalculés sont étiquetés
+comme portant sur la queue disponible.
+
+Le protocole MIDI-USB-04 est aligné sur la règle normative : un changement de mode conserve la route décidée au Note On jusqu’au Note Off et ne coupe pas arbitrairement une note tenue.
+
+## Propriétés/invariants
+
+- Aucun Note Off ne vise une instance inconnue sauf Panic global.
+- Après Panic, le registre d’instances est vide.
+- Chaque lease entrant survit au changement de mode jusqu’à son Note Off.
+- Toute note générée appartient à `[min,max]`.
+- Une Tone Row enregistrée ne contient pas deux fois la même classe de hauteur.
+- Pendulum ne répète pas les extrémités.
+- Une graine identique produit la même séquence Random.
+- Play Once produit exactement la taille de la rangée, émission initiale comprise.
+- MIDI Stop libère la voix, conserve les curseurs et met Tone Row en pause ; Continue ne
+  rejoue rien avant le tick qualifiant suivant.
+- Program Change est filtré par canal, Song Select est global, un slot absent n'est pas
+  consommé et PassThru n'effectue aucun rappel.
+- La restauration d'un preset ne restaure aucune note active ni deadline et commence
+  toujours avec Tone Row `Idle` et transport `Stopped`.
+- `MUTED` peut déplacer/enregistrer mais ne crée aucun Note On ni propriétaire vide ;
+  Auto Tone Row reste `STACKED`.
+- Un strum ne change ni note courante, ni historique, ni curseur, et chaque hit possède
+  exactement sa release.
+- Les sorties audio restent finies pour toute combinaison de paramètres bornés.
+- Le signal reste identique sous le knee du limiteur et le réseau de réverbération ne
+  multiplie pas l'énergie à chaque all-pass.
+
+## Matériel et captures de preuve
+
+Suivre `docs/HARDWARE_TEST_PROTOCOL.md`, puis conserver sous `docs/implementation/evidence/` :
+
+- modèle/tablette, version Android et build ;
+- périphériques MIDI et topologie USB ;
+- commandes de build/test ;
+- logs synthétiques sans données sensibles ;
+- durée du soak test, xruns, crash et anomalies ;
+- vidéos/captures seulement si elles ne contiennent pas de ressources propriétaires.
+
+## Politique de régression
+
+Un bug de note bloquée, crash audio ou corruption de preset exige :
+
+1. un test reproducteur échouant ;
+2. la correction minimale structurée ;
+3. le test passant ;
+4. une entrée Changelog et, si nécessaire, une nouvelle règle d’acceptation.

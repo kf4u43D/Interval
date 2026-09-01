@@ -1,0 +1,39 @@
+Interval Tablet - revalidation AUDIO-01 - 2026-08-31
+
+Target: Samsung SM-X620, Android 16 / API 36, arm64-v8a
+Transport de test: ADB Wi-Fi appaire, sans adresse ni identifiant archive
+Variant: instrumented
+
+Artifacts:
+- app-instrumented.apk
+  size 39862045 bytes
+  SHA-256 E8B5BE702CBE432C0E3C66B36DDA4120FFB979028D6BF8800D4EA73451C24B74
+- app-instrumented-androidTest.apk
+  size 2508467 bytes
+  SHA-256 21493BA4B430146B44AC36CA0F6E2DF1EA6DCEBE810E3B26EB8DFDF51E1BBE9F
+
+Native packaging guard:
+- interval_audio ABIs: arm64-v8a, armeabi-v7a, x86, x86_64
+- libc++_shared.so and liboboe.so present beside libinterval_audio.so for every ABI
+
+AndroidJUnitRunner:
+- isolated NativeAudioEngineDeviceTest: OK (1 test), 6.219 s
+- complete instrumented suite after continuous-slider fix: OK (6 tests), 13.723 s
+- SynthPanelAccessibilityTest observes preview before final commit
+
+AUDIO-01 summary from the complete run:
+- cycles: 10/10
+- sample rate: 48000 Hz
+- frames per burst: 96
+- buffer size: 192 frames
+- maximum queue depth: 17
+- dropped events: 0
+- maximum xruns: 0
+- restart count: 0
+- last error codes: [0]
+
+Physical limits:
+- no USB MIDI device exposed by Android MIDI Manager during this session
+- no subjective listening or audio loopback
+- no physical hotplug, latency measurement or 60-minute soak
+- no physical multi-touch or TalkBack traversal

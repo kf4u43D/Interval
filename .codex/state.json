@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "currentStage": 3,
+  "status": "complete",
+  "lastVerifiedCommit": null,
+  "currentLot": "mvp-complete",
+  "completedAt": "2026-09-01",
+  "lastSoftwareGate": {
+    "date": "2026-09-01",
+    "status": "passed",
+    "jvmTests": 234,
+    "nativeSuites": 2,
+    "instrumentedTests": 6,
+    "lintDebugIssues": 0,
+    "lintInstrumentedIssues": 0,
+    "lintReleaseIssues": 0,
+    "lintBenchmarkIssues": 0,
+    "benchmarkSmoke": true,
+    "apkNativeRuntimeCheck": true
+  },
+  "hardwareValidation": {
+    "androidDevice": true,
+    "audioNominalLifecycleCycles": 10,
+    "usbMidiInput": false,
+    "usbMidiOutput": false,
+    "audioSubjective": false,
+    "audioSoak": false,
+    "continuousSynthControlUserAccepted": true
+  }
+}

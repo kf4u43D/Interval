@@ -1,0 +1,18 @@
+{
+  "java.configuration.updateBuildConfiguration": "automatic",
+  "java.compile.nullAnalysis.mode": "automatic",
+  "cmake.sourceDirectory": "${workspaceFolder}/native-tests",
+  "cmake.buildDirectory": "${workspaceFolder}/native-tests/build",
+  "cmake.configureOnOpen": false,
+  "C_Cpp.default.cppStandard": "c++20",
+  "C_Cpp.default.compileCommands": "${workspaceFolder}/native-tests/build/compile_commands.json",
+  "kotlin.languageServer.enabled": true,
+  "files.associations": {
+    "*.kts": "kotlin"
+  },
+  "search.exclude": {
+    "**/.gradle": true,
+    "**/build": true,
+    "**/.cxx": true
+  }
+}

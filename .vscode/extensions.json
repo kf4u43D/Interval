@@ -1,0 +1,12 @@
+{
+  "recommendations": [
+    "openai.chatgpt",
+    "vscjava.vscode-gradle",
+    "fwcd.kotlin",
+    "redhat.java",
+    "ms-vscode.cpptools",
+    "ms-vscode.cmake-tools",
+    "vadimcn.vscode-lldb",
+    "streetsidesoftware.code-spell-checker"
+  ]
+}

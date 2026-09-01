@@ -1,0 +1,36 @@
+Interval Tablet — Stage 3 AUDIO-01 and synth controls evidence
+Date: 2026-08-22 (Europe/Paris)
+Target: Samsung SM-X620, Android 16 / API 36, arm64
+Build type: instrumented (isolated application id)
+
+Instrumentation result
+- AndroidJUnitRunner: OK (6 tests), 17.94 s
+- Native audio lifecycle: 10/10 start/diagnostics/probe/stop cycles
+- Compose: synth controls and diagnostics exposed; panel disabled before settings load;
+  Performance Lock closes and hides it
+- Existing interval-pad accessibility and populated Tone Row layout tests remained green
+
+AUDIO-01 measured diagnostics
+- negotiated sample rate: 48000 Hz
+- frames per burst: 192
+- target buffer: 384 frames
+- maximum observed event queue depth: 17
+- each cycle enqueued all 16 typed Parameter IDs followed by Panic
+- dropped events: 0
+- recovery/restart count: 0
+- native last error code: 0
+- maximum xrun count reported in a cycle: 1
+- every stop returned streamRunning=false and an empty queue
+
+Artifact identities
+- app-instrumented.apk: 41050917 bytes
+  SHA-256 1AEAD32061DC3FF4EEC435287CF1954B6187DCE8CE2820E071969F23751C35D0
+- app-instrumented-androidTest.apk: 2441967 bytes
+  SHA-256 6E312722AD2B8A0A61EA6C413974B9B9489B3046D0327FCC6D63155E7175C2B7
+
+Scope limits
+- This is a nominal real-stream lifecycle and parameter-wire smoke, not a subjective
+  listening, touch-to-sound latency, physical hotplug/recovery, or 60-minute soak result.
+- A concurrent third-party AAudio stream was present; maxXruns=1 is therefore recorded,
+  not interpreted as an isolated performance ceiling.
+- No physical USB MIDI input or output device was attached during this run.

@@ -1,0 +1,24 @@
+capturedUtc=2026-08-21T13:51:02.0920414+00:00
+package=dev.intervaltablet.benchmark
+durationSeconds=30
+warmupSeconds=10
+installedApkSha256=3F0E2B057159B6A26F7D1F2C434C6A3F9ACB4D0D6F82B8BF611ABF2C196E80C8
+expectedApkSha256=3F0E2B057159B6A26F7D1F2C434C6A3F9ACB4D0D6F82B8BF611ABF2C196E80C8
+versionCode=versionCode=1 minSdk=29 targetSdk=36
+versionName=versionName=0.1.0-dev-benchmark
+packageFlags=pkgFlags=[ HAS_CODE ALLOW_CLEAR_USER_DATA ALLOW_BACKUP KILL_AFTER_RESTORE ]
+privateFlags=privateFlags=[ PRIVATE_FLAG_ACTIVITIES_RESIZE_MODE_RESIZEABLE_VIA_SDK_VERSION ALLOW_AUDIO_PLAYBACK_CAPTURE PRIVATE_FLAG_ALLOW_NATIVE_HEAP_POINTER_TAGGING ]
+lastUpdateTime=lastUpdateTime=2026-08-21 15:41:42
+model=SM-X620
+sdk=36
+buildFingerprint=samsung/gts10fepwifixx/gts10fepwifi:16/BP4A.251205.006/X620XXS9CZG3_OXM9CZG3:user/release-keys
+foregroundBefore=topResumedActivity=ActivityRecord{100056859 u0 dev.intervaltablet.benchmark/dev.intervaltablet.MainActivity t7453}
+refreshBefore=    mActiveModeId=1 |     mActiveRenderFrameRate=90.0
+batteryBefore=  AC powered: true |   USB powered: false |   Wireless powered: false |   Dock powered: false |   status: 5 |   level: 100 |   temperature: 290 |   Capacity level: -1
+thermalBefore=Thermal Status: 0
+foregroundAtStart=topResumedActivity=ActivityRecord{100056859 u0 dev.intervaltablet.benchmark/dev.intervaltablet.MainActivity t7453}
+foregroundAfter=topResumedActivity=ActivityRecord{100056859 u0 dev.intervaltablet.benchmark/dev.intervaltablet.MainActivity t7453}
+refreshAtStart=    mActiveModeId=1 |     mActiveRenderFrameRate=90.0
+refreshAfter=    mActiveModeId=1 |     mActiveRenderFrameRate=90.0
+batteryAfter=  AC powered: true |   USB powered: false |   Wireless powered: false |   Dock powered: false |   status: 5 |   level: 100 |   temperature: 290 |   Capacity level: -1
+thermalAfter=Thermal Status: 0

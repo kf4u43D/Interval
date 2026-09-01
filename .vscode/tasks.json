@@ -1,0 +1,76 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Doctor",
+      "type": "shell",
+      "command": "./scripts/doctor.sh",
+      "problemMatcher": []
+    },
+    {
+      "label": "Verify structure",
+      "type": "shell",
+      "command": "./scripts/verify-structure.sh",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Verify domain",
+      "type": "shell",
+      "command": "./scripts/verify-domain.sh",
+      "group": "test",
+      "problemMatcher": [
+        "$kotlinc"
+      ]
+    },
+    {
+      "label": "Verify native DSP",
+      "type": "shell",
+      "command": "./scripts/verify-native.sh",
+      "group": "test",
+      "problemMatcher": [
+        "$gcc"
+      ]
+    },
+    {
+      "label": "Gradle assemble debug",
+      "type": "shell",
+      "command": "./gradlew :app:assembleDebug",
+      "group": "build",
+      "problemMatcher": [
+        "$gradle"
+      ]
+    },
+    {
+      "label": "Full verify",
+      "type": "shell",
+      "command": "./scripts/verify.sh",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": [
+        "$gradle",
+        "$gcc"
+      ]
+    },
+    {
+      "label": "Codex stage 1",
+      "type": "shell",
+      "command": "./scripts/codex-stage.sh 1",
+      "problemMatcher": []
+    },
+    {
+      "label": "Codex stage 2",
+      "type": "shell",
+      "command": "./scripts/codex-stage.sh 2",
+      "problemMatcher": []
+    },
+    {
+      "label": "Codex stage 3",
+      "type": "shell",
+      "command": "./scripts/codex-stage.sh 3",
+      "problemMatcher": []
+    }
+  ]
+}

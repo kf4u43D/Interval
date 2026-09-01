@@ -1,0 +1,16 @@
+{
+  "folders": [
+    { "name": "Interval Tablet", "path": "." }
+  ],
+  "settings": {
+    "files.eol": "\n",
+    "editor.formatOnSave": true,
+    "editor.rulers": [100, 120],
+    "files.exclude": {
+      "**/.gradle": true,
+      "**/build": true,
+      "**/.cxx": true
+    },
+    "terminal.integrated.cwd": "${workspaceFolder}"
+  }
+}

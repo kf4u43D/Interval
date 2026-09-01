@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Native DSP tests (LLDB)",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/native-tests/build/dsp_smoke_tests",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "Verify native DSP"
+    }
+  ]
+}
