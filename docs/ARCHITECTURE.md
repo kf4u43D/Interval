@@ -166,7 +166,7 @@ actif et une libération tardive d'une ancienne origine ne peut pas couper la vo
 ## Données persistées
 
 - version de schéma ;
-- clé, gamme, plage, accord et articulation des pads ;
+- clé, gamme, plage, accord, articulation des pads et Force to Scale ;
 - mapping MIDI ;
 - ports préférés par identité descriptive ;
 - activation du moniteur audio et Performance Lock ;
@@ -176,8 +176,9 @@ actif et une libération tardive d'une ancienne origine ne peut pas couper la vo
 - banque de 128 presets et slot sélectionné.
 
 Une migration explicite accompagne tout changement de schéma. Le schéma Settings courant
-est en version 4 ; les presets restent en version 3 et la banque en version 2. Les lecteurs
-Settings v0 à v3 installent le patch synthé par défaut. Les lecteurs de presets v1/v2
+est en version 5 ; les presets sont en version 4 et la banque en version 3. Les lecteurs
+Settings v0 à v3 installent le patch synthé par défaut et Settings v0 à v4 désactive Force
+to Scale. Les lecteurs de presets v1/v2
 infèrent `ARPEGGIATED` pour l'accord Off et `STACKED` pour un accord actif, puis réécrivent
 le format courant. Le patch audio global est volontairement absent des presets : aucun
 rappel UI, Program Change ou Song Select ne change le son du moniteur. Les identifiants
@@ -207,7 +208,8 @@ Le panneau Synthé non modal observe une projection audio dédiée et expose not
 - dernière erreur non sensible.
 
 Compose n'observe jamais l'état monolithique depuis la coque de scène. Des projections
-immuables séparent header, contenu/cursor Tone Row, grille, chacun des neuf pads, ruban,
+immuables séparent header, contenu/cursor Tone Row, grille, chacun des neuf pads, surface
+harmonique, ruban,
 articulation/strummer, console, statut et synthé/diagnostics. Les pads conservent neuf nœuds tactiles/focus/sémantiques
 distincts mais dessinent leur contenu via cache afin qu'un tick n'impose pas neuf sous-arbres
 Material complets.
@@ -227,6 +229,6 @@ Le modèle de séquence reste une liste de mouvements entiers. Rest, Random Step
 attendent des actions typées ; Ratchet requiert plusieurs Note On futurs annulables par
 génération, ce que le job unique de release ne doit pas simuler. La génération MIDI
 Clock/transport et Song Position Pointer, le catalogue étendu d'actions mappables, les
-CC relatifs/continus, gammes/presets étendus et l'optimisation soutenue à 90 Hz restent
-hors de l'architecture V2. CV, réseau, Scala, microtonalité, MPE et MIDI 2.0 restent hors
+CC relatifs/continus, gammes personnalisées/scopes de presets et l'optimisation soutenue à
+90 Hz restent hors de l'architecture V2.1. CV, réseau, Scala, microtonalité, MPE et MIDI 2.0 restent hors
 des étapes engagées.

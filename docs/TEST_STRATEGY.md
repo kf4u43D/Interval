@@ -78,7 +78,8 @@ Rapides, déterministes, sans Android :
 - audio Oboe, reprise et session prolongée ;
 - accessibilité et paysage.
 - conservation de la scène pondérée avec une timeline de 1 à 12 éléments ;
-- neuf pads sémantiques distincts, cliquables et mesurés à au moins 72 dp.
+- neuf pads sémantiques distincts, cliquables et mesurés à au moins 48 dp ;
+- dix variantes d’accords simultanément visibles et Force to Scale accessible sur la scène.
 - trois sélecteurs d'articulation et chaque corde du voicing comme cibles accessibles
   distinctes d'au moins 48 dp.
 - panneau Synthé scrollable, sliders décrits, ordre aperçu puis commit et diagnostics
@@ -119,8 +120,22 @@ Ces tests instrumentés sont requis pour la réception matérielle. Ils ne sont 
   patch et la sélection ordonnée des seuls paramètres modifiés ; les tests ViewModel
   couvrent les aperçus transitoires, le commit, la persistance et le rejeu après recovery.
 - Les tests DSP couvrent la convergence puis le snap exact des paramètres lissés ;
-  `SynthPanelAccessibilityTest` couvre les contrôles, l'ordre aperçu/commit et les
-  diagnostics exposés par Compose.
+  `SynthPanelAccessibilityTest` couvre les contrôles, l'ordre aperçu/commit, le temps et
+  le feedback du delay, ainsi que les diagnostics exposés par Compose.
+
+## État de preuve du lot V2.1
+
+- `ForceToScaleTest` couvre le catalogue de treize gammes, la quantification chromatique,
+  l’égalité vers le bas, le voicing après Shift et l’ownership exact des releases.
+- Les migrations Settings v5, Preset v4 et banque v3 gardent les fixtures historiques et
+  installent Force to Scale à `false` pour les formats antérieurs.
+- Le test ViewModel vérifie le changement d’état et l’autosauvegarde ; le test Compose
+  mesure les pads compacts et trouve les dix accords sur la page principale.
+- La réception directe SM-X620 vérifie le package V2.1 coinstallable, son libellé distinct
+  et la présence réelle des contrôles ; les tests instrumentés exercent le delay continu.
+- Le gate V2.1 réussit 136/136 tests domaine sur 12 suites et 161/161 tests application
+  sur 19 suites, soit 297/297, plus CTest 2/2, quatre Lint sans issue et 7/7 tests
+  instrumentés directs en 17,279 s.
 
 Le rapport `docs/VERIFICATION_REPORT.md` reste la source du résultat chiffré du dernier
 gate complet. Ces tests JVM exercent directement l’acteur et son ordonnanceur coroutine,

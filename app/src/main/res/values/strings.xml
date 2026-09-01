@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Interval Tablet</string>
+    <string name="app_name">Interval Tablet V2</string>
     <string name="performance_note">Note</string>
     <string name="performance_degree">Degré</string>
     <string name="performance_chromatic_anchor">Ancre chromatique</string>
     <string name="performance_key">Clé</string>
     <string name="performance_scale">Gamme</string>
     <string name="performance_chord">Accord</string>
+    <string name="performance_chord_variants">Variantes d’accords</string>
+    <string name="performance_scales">Gammes</string>
+    <string name="performance_force_to_scale">Force to Scale</string>
     <string name="performance_articulation_arpeggiated">Arpégé</string>
     <string name="performance_articulation_stacked">Plaqué</string>
     <string name="performance_articulation_muted">Muet</string>
@@ -57,7 +60,9 @@
     <string name="synth_sustain">Maintien</string>
     <string name="synth_release">Relâchement</string>
     <string name="synth_chorus">Chorus</string>
-    <string name="synth_delay">Delay</string>
+    <string name="synth_delay_time">Delay · temps</string>
+    <string name="synth_delay_feedback">Delay · feedback</string>
+    <string name="synth_delay_mix">Delay · mix</string>
     <string name="synth_reverb">Réverbération</string>
     <string name="synth_master">Niveau général</string>
     <string name="synth_value_percent">%1$d %%</string>

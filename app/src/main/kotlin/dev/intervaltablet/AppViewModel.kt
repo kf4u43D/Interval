@@ -329,6 +329,10 @@ class IntervalTabletViewModel @JvmOverloads constructor(
         reduceAndPersist(InstrumentAction.SetPadArticulation(mode, clock.nowNanos()))
     }
 
+    fun setForceToScale(enabled: Boolean) {
+        reduceAndPersist(InstrumentAction.SetForceToScale(enabled, clock.nowNanos()))
+    }
+
     fun strumTone(index: Int, velocity: Int) {
         if (index < 0 || velocity !in 1..127) return
         val source = TriggerSource.System("ui:strum:${oneShotSequence.incrementAndGet()}")
@@ -1409,6 +1413,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
                 scaleId = config.scale.id,
                 chordId = config.chord.id,
                 padArticulation = config.padArticulation,
+                forceToScale = config.forceToScale,
                 rangeMin = config.range.min,
                 rangeMax = config.range.max,
                 solfegeWrap = config.solfegeWrap,
@@ -1445,6 +1450,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
                 outputChannel = preset.routing.outputChannel,
                 chord = ChordLibrary.byId(context.chordId),
                 padArticulation = context.padArticulation,
+                forceToScale = context.forceToScale,
             )
         }.getOrElse {
             InstrumentConfig(
@@ -1453,6 +1459,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
                 outputChannel = preset.routing.outputChannel,
                 chord = ChordLibrary.byId(context.chordId),
                 padArticulation = context.padArticulation,
+                forceToScale = context.forceToScale,
             )
         }
         performanceState = PerformanceCoordinatorState.initial(config).copy(
@@ -1483,6 +1490,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
                 scaleId = stored.scaleId,
                 chordId = stored.chordId,
                 padArticulation = stored.padArticulation,
+                forceToScale = stored.forceToScale,
                 rangeMin = stored.rangeMin,
                 rangeMax = stored.rangeMax,
                 solfegeWrap = stored.solfegeWrap,
@@ -1799,6 +1807,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
             scaleId = config.scale.id,
             chordId = config.chord.id,
             padArticulation = config.padArticulation,
+            forceToScale = config.forceToScale,
             passThroughMode = performance.router.mode,
             rangeMin = config.range.min,
             rangeMax = config.range.max,
@@ -1993,6 +2002,7 @@ private fun PerformanceCommand.mayMutatePersistableContent(
             is InstrumentAction.SetWrap,
             is InstrumentAction.SetChord,
             is InstrumentAction.SetPadArticulation,
+            is InstrumentAction.SetForceToScale,
             is InstrumentAction.SetOutputChannel,
             -> true
             is InstrumentAction.PressInterval -> state.toneRow.mode in setOf(

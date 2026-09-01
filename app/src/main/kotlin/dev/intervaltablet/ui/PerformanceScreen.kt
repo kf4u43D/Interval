@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -128,8 +130,11 @@ internal val PerformanceIntervalSteps: List<Int> = listOf(2, 3, 4, -1, 0, 1, -4,
 private val IntervalRows: List<List<Int>> = PerformanceIntervalSteps.chunked(3)
 internal const val SynthPanelOpenTestTag: String = "synth-panel:open"
 internal const val SynthPanelTestTag: String = "synth-panel"
+internal const val ForceToScaleTestTag: String = "force-to-scale"
 internal const val SynthCutoffUiMaximumHz: Float = 20_000f
 internal fun synthSliderTestTag(key: String): String = "synth-slider:$key"
+internal fun scaleChipTestTag(scaleId: String): String = "scale-chip:$scaleId"
+internal fun chordChipTestTag(chordId: String): String = "chord-chip:$chordId"
 
 @androidx.compose.runtime.Immutable
 internal data class IntervalPadPreview(
@@ -185,6 +190,7 @@ fun PerformanceScreen(
     onSetScale: (ScaleDefinition) -> Unit,
     onSetRoot: (Int) -> Unit,
     onSetChord: (ChordDefinition) -> Unit,
+    onSetForceToScale: (Boolean) -> Unit = {},
     onSetRange: (MidiNoteRange) -> Unit,
     onSetWrap: (Boolean) -> Unit,
     onSetInputChannel: (Int?) -> Unit,
@@ -231,6 +237,7 @@ fun PerformanceScreen(
         onSetScale = onSetScale,
         onSetRoot = onSetRoot,
         onSetChord = onSetChord,
+        onSetForceToScale = onSetForceToScale,
         onSetRange = onSetRange,
         onSetWrap = onSetWrap,
         onSetInputChannel = onSetInputChannel,
@@ -267,6 +274,7 @@ internal fun ProjectedPerformanceScreen(
     onSetScale: (ScaleDefinition) -> Unit,
     onSetRoot: (Int) -> Unit,
     onSetChord: (ChordDefinition) -> Unit,
+    onSetForceToScale: (Boolean) -> Unit = {},
     onSetRange: (MidiNoteRange) -> Unit,
     onSetWrap: (Boolean) -> Unit,
     onSetInputChannel: (Int?) -> Unit,
@@ -371,6 +379,13 @@ internal fun ProjectedPerformanceScreen(
                     onOpenArrangement = openArrangement,
                 )
 
+                ProjectedHarmonySurface(
+                    state = projections.controls,
+                    onSetScale = onSetScale,
+                    onSetChord = onSetChord,
+                    onSetForceToScale = onSetForceToScale,
+                )
+
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     StageBackdrop(Modifier.fillMaxSize())
                     if (horizontalStrummer) {
@@ -378,33 +393,38 @@ internal fun ProjectedPerformanceScreen(
                             modifier = Modifier.fillMaxSize(),
                             verticalArrangement = Arrangement.spacedBy(sectionGap),
                         ) {
-                            Row(
+                            Box(
                                 modifier = Modifier.weight(1f).fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(sectionGap),
+                                contentAlignment = Alignment.Center,
                             ) {
-                                ProjectedUtilityRail(
-                                    state = projections.utility,
-                                    compact = compact,
-                                    onHome = onHome,
-                                    onUndo = onUndo,
-                                    onPanic = onPanic,
-                                    modifier = Modifier.width(104.dp).fillMaxHeight(),
-                                )
-                                ProjectedIntervalGrid(
-                                    pads = projections.pads,
-                                    compact = compact,
-                                    onDown = onIntervalDown,
-                                    onUp = onIntervalUp,
-                                    onOneShot = onIntervalOneShot,
-                                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(sectionGap),
+                                ) {
+                                    ProjectedUtilityRail(
+                                        state = projections.utility,
+                                        compact = compact,
+                                        onHome = onHome,
+                                        onUndo = onUndo,
+                                        onPanic = onPanic,
+                                        modifier = Modifier.width(104.dp).fillMaxHeight(),
+                                    )
+                                    ProjectedIntervalGrid(
+                                        pads = projections.pads,
+                                        compact = compact,
+                                        onDown = onIntervalDown,
+                                        onUp = onIntervalUp,
+                                        onOneShot = onIntervalOneShot,
+                                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                                    )
+                                }
                             }
                             ProjectedStrummerLane(
                                 state = projections.articulation,
                                 orientation = StrummerOrientation.HORIZONTAL,
                                 onSetArticulation = onSetPadArticulation,
                                 onStrumTone = onStrumTone,
-                                modifier = Modifier.fillMaxWidth().height(160.dp),
+                                modifier = Modifier.fillMaxWidth().height(132.dp),
                             )
                         }
                     } else {
@@ -641,6 +661,25 @@ private fun ProjectedQuickControls(
         onOpenSynth = onOpenSynth,
         onOpenConsole = onOpenConsole,
         modifier = modifier,
+    )
+}
+
+@Composable
+private fun ProjectedHarmonySurface(
+    state: State<PerformanceControlsUiState>,
+    onSetScale: (ScaleDefinition) -> Unit,
+    onSetChord: (ChordDefinition) -> Unit,
+    onSetForceToScale: (Boolean) -> Unit,
+) {
+    val controls = state.value
+    HarmonySurface(
+        scale = controls.scale,
+        chord = controls.chord,
+        forceToScale = controls.forceToScale,
+        enabled = controls.settingsLoaded && !controls.performanceLock,
+        onSetScale = onSetScale,
+        onSetChord = onSetChord,
+        onSetForceToScale = onSetForceToScale,
     )
 }
 
@@ -1468,7 +1507,7 @@ private fun IntervalPad(
 
     Box(
         modifier = modifier
-            .sizeIn(minWidth = 72.dp, minHeight = 72.dp)
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
             .drawWithCache {
                 val pad = state.value
                 val active = pad.activeCount > 0
@@ -1637,6 +1676,97 @@ private fun IntervalPad(
                 )
             },
     ) {}
+}
+
+@Composable
+private fun HarmonySurface(
+    scale: ScaleDefinition,
+    chord: ChordDefinition,
+    forceToScale: Boolean,
+    enabled: Boolean,
+    onSetScale: (ScaleDefinition) -> Unit,
+    onSetChord: (ChordDefinition) -> Unit,
+    onSetForceToScale: (Boolean) -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = ControlShape,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilterChip(
+                    selected = forceToScale,
+                    onClick = { onSetForceToScale(!forceToScale) },
+                    enabled = enabled,
+                    modifier = Modifier.heightIn(min = 48.dp).testTag(ForceToScaleTestTag),
+                    label = { Text(stringResource(R.string.performance_force_to_scale)) },
+                )
+                Text(
+                    stringResource(R.string.performance_scales).uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.Bold,
+                )
+                LazyRow(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    items(ScaleLibrary.all, key = ScaleDefinition::id) { option ->
+                        FilterChip(
+                            selected = option == scale,
+                            onClick = { onSetScale(option) },
+                            enabled = enabled,
+                            modifier = Modifier
+                                .heightIn(min = 48.dp)
+                                .testTag(scaleChipTestTag(option.id)),
+                            label = { Text(option.displayName, maxLines = 1) },
+                        )
+                    }
+                }
+            }
+            Text(
+                stringResource(R.string.performance_chord_variants).uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.Bold,
+            )
+            ChordLibrary.all.chunked(5).forEach { options ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    options.forEach { option ->
+                        FilterChip(
+                            selected = option == chord,
+                            onClick = { onSetChord(option) },
+                            enabled = enabled,
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 48.dp)
+                                .testTag(chordChipTestTag(option.id)),
+                            label = {
+                                Text(
+                                    option.displayName,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -2013,9 +2143,29 @@ private fun SynthPanel(
             patch = draftPatch,
             parameter = SynthParameter.CHORUS_MIX,
         ),
+        logarithmicSynthControl(
+            key = SynthParameter.DELAY_TIME.name,
+            label = stringResource(R.string.synth_delay_time),
+            valueText = stringResource(
+                R.string.synth_value_seconds,
+                draftPatch.delayTimeSeconds,
+            ),
+            patch = draftPatch,
+            parameter = SynthParameter.DELAY_TIME,
+        ),
+        directSynthControl(
+            key = SynthParameter.DELAY_FEEDBACK.name,
+            label = stringResource(R.string.synth_delay_feedback),
+            valueText = stringResource(
+                R.string.synth_value_percent,
+                (draftPatch.delayFeedback * 100f).roundToInt(),
+            ),
+            patch = draftPatch,
+            parameter = SynthParameter.DELAY_FEEDBACK,
+        ),
         directSynthControl(
             key = SynthParameter.DELAY_MIX.name,
-            label = stringResource(R.string.synth_delay),
+            label = stringResource(R.string.synth_delay_mix),
             valueText = stringResource(
                 R.string.synth_value_percent,
                 (draftPatch.delayMix * 100f).roundToInt(),

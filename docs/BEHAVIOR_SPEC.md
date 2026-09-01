@@ -14,6 +14,9 @@ Le MVP utilise exclusivement MIDI 1.0 en tempérament égal 12-TET.
 - Avec `solfegeWrap=true`, dépasser la plage reboucle sur la première/dernière note valide de la plage. Avec `false`, le déplacement est borné.
 - `Home` choisit la fondamentale la plus proche du centre de la plage.
 - Une note d’ancrage externe hors gamme est admise ; le premier déplacement positif choisit la prochaine note de gamme dans le sens montant, et le premier déplacement négatif la précédente.
+- La bibliothèque standard contient Major/Ionian, Natural Minor/Aeolian, Harmonic Minor,
+  Melodic Minor ascendant, Dorian, Phrygian, Lydian, Mixolydian, Locrian, les pentatoniques
+  majeure/mineure, Blues et Chromatic.
 
 ## 2. Actions de performance
 
@@ -23,11 +26,13 @@ Au `press` :
 
 1. Libérer les notes encore associées à la même source physique, le cas échéant.
 2. Calculer la nouvelle hauteur.
-3. Ajouter l’ancienne hauteur à l’historique uniquement si la nouvelle est différente.
-4. Construire le voicing complet de l’accord courant.
-5. Appliquer l'articulation de pad : lead seul en `ARPEGGIATED`, voicing complet en
+3. Si Force to Scale est actif, quantifier cette hauteur vers la note la plus proche de la
+   gamme et de la plage actives ; une égalité choisit la note inférieure.
+4. Ajouter l’ancienne hauteur à l’historique uniquement si la nouvelle est différente.
+5. Construire le voicing complet de l’accord courant.
+6. Appliquer l'articulation de pad : lead seul en `ARPEGGIATED`, voicing complet en
    `STACKED`, aucune note en `MUTED`.
-6. Émettre les Note On retenus et mémoriser exactement les notes/instances actives pour
+7. Émettre les Note On retenus et mémoriser exactement les notes/instances actives pour
    cette source. Une pression muette ne crée pas de propriétaire vide.
 
 Au `release`, émettre un Note Off pour chaque instance créée par cette source. La position musicale ne revient pas en arrière.
@@ -64,6 +69,17 @@ pression normale. Une même graine et une même suite d'actions produisent les m
   conserve sa hauteur et sa future release exacte.
 - Le relâchement de la Note, le passage d'un CC sous son seuil, une purge ou Panic retire
   le décalage de la source concernée. Les autres modificateurs tenus restent actifs.
+
+### Force to Scale
+
+- Le réglage est désactivé par défaut et agit sur les prochaines notes générées par les
+  pressions chromatiques, Tone Row absolu, Same Pitch, accords, strummer et Chromatic Shift.
+- Chaque hauteur résultante est ramenée à la note disponible la plus proche de la gamme
+  active. À distance égale, la hauteur inférieure gagne de manière déterministe.
+- Le MIDI entrant transmis en `PassThru` reste inchangé : Force to Scale n’est pas un
+  quantificateur du flux brut et ne duplique aucune règle dans le routeur.
+- Basculer le réglage ne coupe pas les notes déjà tenues. Leur future Note Off conserve la
+  hauteur exacte mémorisée par leur source.
 
 ### Undo
 
@@ -265,13 +281,14 @@ Une transition de mode ne coupe pas arbitrairement les notes déjà tenues. Chaq
   restaurés, mais les notes actives, curseurs transitoires, compteurs, deadlines et état
   de lecture ne le sont pas : Tone Row revient à `Idle` et le transport à `Stopped`.
 - La session de travail, la banque et le slot sélectionné sont persistés dans DataStore,
-  articulation comprise. Les schémas courants sont Settings v4, Preset v3 et banque v2.
+  articulation et Force to Scale compris. Les schémas courants sont Settings v5,
+  Preset v4 et banque v3.
   La migration d'un preset ancien infère `ARPEGGIATED` lorsque
   l'accord est Off et `STACKED` lorsqu'un accord est actif afin de préserver son rendu
   historique. Le schéma courant migre aussi le format plat de l'étape 1. Les imports/exports de fichiers
   restent hors périmètre.
-- Le patch du synthétiseur interne est un réglage global de Settings v4. Il n'entre pas
-  dans les snapshots Preset v3 ou la banque v2 ; sauvegarde, rappel UI, Program Change et
+- Le patch du synthétiseur interne est un réglage global de Settings v5. Il n'entre pas
+  dans les snapshots Preset v4 ou la banque v3 ; sauvegarde, rappel UI, Program Change et
   Song Select conservent donc le patch courant. Le Panic préalable au rappel éteint les
   voix et les effets sans réinitialiser ses paramètres.
 - L’autosauvegarde compare le snapshot durable après les commandes tactiles et MIDI :
@@ -312,14 +329,14 @@ sauvegarde pas de nouveau ce slot.
   chorus mix, temps/feedback/mix du delay, reverb mix et master.
 - Le cutoff canonique de la session est borné à `20 Hz…20 kHz`. Le moteur natif applique
   en plus le plafond sûr du sample rate réellement négocié.
-- Les sessions Settings v0 à v3 migrent vers le patch par défaut exact. Settings v4
+- Les sessions Settings v0 à v3 migrent vers le patch par défaut exact. Settings v4/v5
   persiste les seize champs globalement et borne chaque valeur lue avant la frontière JNI.
 - L'acteur rejoue les seize paramètres dans l'ordre après chaque démarrage audio accepté.
   Il rejoue aussi le patch courant après toute récupération native, qu'elle soit observée
   par une transition d'arrêté à actif ou seulement par l'incrément du compteur de
   redémarrages, afin d'inclure les changements effectués pendant la reprise.
-- Le panneau Synthé est non modal. Il expose Timbre, cutoff/résonance, ADSR,
-  chorus/delay/reverb, master et une projection de diagnostics audio dédiée. Il est
+- Le panneau Synthé est non modal. Il expose Timbre, cutoff/résonance, ADSR, chorus,
+  temps/feedback/mix du delay, reverb, master et une projection de diagnostics audio dédiée. Il est
   désactivé tant que les réglages ne sont pas chargés, puis fermé et masqué sous
   Performance Lock ; le toggle Audio Monitor reste disponible.
 - Pendant un geste de slider, Compose conserve le brouillon local et publie au plus un
@@ -340,7 +357,7 @@ Les tests fournissent explicitement :
 
 Aucune règle du domaine ne lit directement l’heure système, Android, un périphérique ou un générateur aléatoire global.
 
-## 13. Reports après la V2
+## 13. Reports après la V2.1
 
 - Les éléments de séquence typés Rest, Random Step et Ratchet ne sont pas assimilés à un
   mouvement entier. Ratchet attend un ordonnanceur de Note On futures annulable par
@@ -350,5 +367,5 @@ Aucune règle du domaine ne lit directement l’heure système, Android, un pér
   spécification ne couvre que la réception du transport MIDI.
 - Les sélections de gamme, clé, accord et preset par mapping, les CC relatifs/continus,
   profils et import/export restent hors du catalogue V2.
-- La bibliothèque étendue de gammes, les scopes de presets, l'optimisation soutenue à
+- Les gammes personnalisées, les scopes de presets, l'optimisation soutenue à
   90 Hz et la certification USB MIDI/TalkBack/multi-touch/loopback/soak restent ouvertes.

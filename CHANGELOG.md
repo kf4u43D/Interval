@@ -10,7 +10,13 @@
 - Socle Kotlin pur pour navigation intervallique, accords et routage MIDI.
 - UI Compose de performance et adaptateurs Android de départ.
 - Moteur audio Oboe/DSP minimal et tests natifs hôte.
-- Quatre étapes Codex autonomes avec critères d’acceptation.
+- Cinq étapes Codex autonomes avec critères d’acceptation.
+- V2.1 coinstallable `0.2.1-dev-instrumented` nommée « Interval Tablet V2 », sans
+  remplacement du package V1.
+- Force to Scale déterministe, treize gammes standards 12-TET et persistance
+  Settings v5/Preset v4/banque v3 avec migrations historiques.
+- Surface harmonique permanente : dix variantes d’accords en deux rangées et gammes
+  accessibles directement sur la page de performance.
 - Parseur MIDI incrémental testé : running status, temps réel intercalé, SysEx et messages fragmentés.
 - Audit de structure portable et compilation hôte du pont JNI/Oboe contre stubs.
 - Traçabilité vers le guide utilisateur, protocole matériel et rapport de vérification.
@@ -66,6 +72,11 @@
   et `libc++_shared.so` pour chaque ABI produite.
 
 ### Changed
+
+- Pads portrait compactés avec cible minimale de 48 dp et zone de grille plafonnée ; le
+  Strummer horizontal utilise une hauteur réduite.
+- Panneau Synthé complété avec trois contrôles distincts pour le temps, le feedback et le
+  mix du delay, tous prévisualisés pendant le geste puis persistés au relâchement.
 
 - Domaine musical finalisé pour la porte 1 : mouvements `-14…+14`, ancre hors gamme,
   wrap/clamp, Home, Undo, changements de contexte et invariants de note range.
@@ -213,10 +224,17 @@
 - Émission MIDI Clock/Start/Stop/Continue et Song Position Pointer.
 - Actions mappées de gamme/clé/accord/preset, CC relatifs/continus, profils et
   import/export.
-- Catalogues étendus de gammes/presets, optimisation soutenue à 90 Hz et certification
+- Gammes personnalisées/scopes de presets, optimisation soutenue à 90 Hz et certification
   USB MIDI/Learn, TalkBack, vrai multi-touch, loopback/hotplug et soak.
 
 ### Verified
+
+- Gate Stage 5/V2.1 : 136/136 tests domaine sur 12 suites et 161/161 tests application
+  sur 19 suites, soit 297/297 ; CTest 2/2, quatre Lint sans issue, tous les assemblages et
+  runtimes natifs des quatre ABI validés.
+- Réception directe SM-X620/API 36 : 7/7 en 17,279 s, incluant accords/Force to Scale,
+  pads compacts et gestes du temps/feedback delay. Seuls les packages V1 et V2.1 restent
+  installés après retrait de l’APK de test.
 
 - Gate Stage 4/V2 final du 1er septembre sur le commit
   `13c2d7c4915e8da65c5e6898daf8ee9a5f253e75` : 131/131 tests domaine sur 11 suites et

@@ -33,6 +33,7 @@ class PerformancePresetSerializerTest {
                 scaleId = "minor_pentatonic",
                 chordId = "wide",
                 padArticulation = PadArticulation.MUTED,
+                forceToScale = true,
                 rangeMin = 12,
                 rangeMax = 120,
                 solfegeWrap = false,
@@ -88,7 +89,7 @@ class PerformancePresetSerializerTest {
             val preset = PerformancePresetSnapshot(toneRow = ToneRowSnapshot(playMode = mode))
             val encoded = PerformancePresetSerializer.encode(preset)
 
-            assertTrue("mode=$mode", encoded.contains("\"schemaVersion\":3"))
+            assertTrue("mode=$mode", encoded.contains("\"schemaVersion\":4"))
             assertTrue("mode=$mode", encoded.contains("\"playMode\":\"${mode.name}\""))
             assertEquals("mode=$mode", preset, PerformancePresetSerializer.decode(encoded))
         }
@@ -147,6 +148,7 @@ class PerformancePresetSerializerTest {
         assertEquals(9, migrated.toneRow.referenceRootPitchClass)
         assertEquals("dorian", migrated.toneRow.referenceScaleId)
         assertEquals(PadArticulation.STACKED, migrated.musicalContext.padArticulation)
+        assertFalse(migrated.musicalContext.forceToScale)
         assertEquals(90, migrated.transport.tempoBpm)
         assertEquals(StoredClockSource.INTERNAL, migrated.transport.clockSource)
     }
@@ -167,7 +169,7 @@ class PerformancePresetSerializerTest {
     @Test
     fun corruptFutureDuplicateAndOversizedPayloadsAreRejected() {
         val valid = PerformancePresetSerializer.encode(PerformancePresetSnapshot())
-        val future = valid.replaceFirst("\"schemaVersion\":3", "\"schemaVersion\":4")
+        val future = valid.replaceFirst("\"schemaVersion\":4", "\"schemaVersion\":5")
         val duplicatePitchClass = """{
             "schemaVersion":1,
             "toneRow":[

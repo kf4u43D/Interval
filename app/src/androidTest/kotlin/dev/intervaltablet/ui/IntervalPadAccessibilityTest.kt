@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -14,6 +15,8 @@ import dev.intervaltablet.PerformanceCoordinatorState
 import dev.intervaltablet.domain.ChordLibrary
 import dev.intervaltablet.domain.InstrumentConfig
 import dev.intervaltablet.domain.PadArticulation
+import dev.intervaltablet.domain.ScaleDefinition
+import dev.intervaltablet.domain.ScaleLibrary
 import dev.intervaltablet.domain.strumNotes
 import dev.intervaltablet.ui.theme.IntervalTabletTheme
 import org.junit.Assert.assertEquals
@@ -29,8 +32,11 @@ class IntervalPadAccessibilityTest {
     val composeRule = createAndroidComposeRule<IntervalComposeTestActivity>()
 
     @Test
-    fun nineDrawnPadsRemainDistinctAccessibleSeventyTwoDpTargets() {
+    fun nineCompactDrawnPadsRemainDistinctAccessibleFortyEightDpTargets() {
         var oneShotStep: Int? = null
+        var selectedChord = ChordLibrary.off
+        var selectedScale: ScaleDefinition = ScaleLibrary.major
+        var forceToScale = false
         composeRule.setContent {
             IntervalTabletTheme {
                 PerformanceScreen(
@@ -41,9 +47,10 @@ class IntervalPadAccessibilityTest {
                     onUndo = {},
                     onHome = {},
                     onPanic = {},
-                    onSetScale = {},
+                    onSetScale = { selectedScale = it },
                     onSetRoot = {},
-                    onSetChord = {},
+                    onSetChord = { selectedChord = it },
+                    onSetForceToScale = { forceToScale = it },
                     onSetRange = {},
                     onSetWrap = {},
                     onSetInputChannel = {},
@@ -61,7 +68,7 @@ class IntervalPadAccessibilityTest {
 
         val density = InstrumentationRegistry.getInstrumentation()
             .targetContext.resources.displayMetrics.density
-        val minimumTargetPixels = 72f * density
+        val minimumTargetPixels = 48f * density
         PerformanceIntervalSteps.forEach { steps ->
             val node = composeRule.onNodeWithTag(intervalPadTestTag(steps), useUnmergedTree = true)
                 .assertIsDisplayed()
@@ -77,7 +84,26 @@ class IntervalPadAccessibilityTest {
 
         composeRule.onNodeWithTag(intervalPadTestTag(3), useUnmergedTree = true)
             .performSemanticsAction(SemanticsActions.OnClick)
-        composeRule.runOnIdle { assertEquals(3, oneShotStep) }
+        ChordLibrary.all.forEach { chord ->
+            composeRule.onNodeWithTag(chordChipTestTag(chord.id), useUnmergedTree = true)
+                .assertIsDisplayed()
+                .assertHasClickAction()
+        }
+        composeRule.onNodeWithTag(chordChipTestTag(ChordLibrary.triad.id), useUnmergedTree = true)
+            .performClick()
+        composeRule.onNodeWithTag(scaleChipTestTag(ScaleLibrary.major.id), useUnmergedTree = true)
+            .assertIsDisplayed()
+            .assertHasClickAction()
+        composeRule.onNodeWithTag(ForceToScaleTestTag, useUnmergedTree = true)
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .performClick()
+        composeRule.runOnIdle {
+            assertEquals(3, oneShotStep)
+            assertEquals(ChordLibrary.triad, selectedChord)
+            assertEquals(ScaleLibrary.major, selectedScale)
+            assertTrue(forceToScale)
+        }
     }
 
     @Test

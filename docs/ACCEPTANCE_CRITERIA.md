@@ -218,3 +218,28 @@ Pointer, les actions mappées de gamme/clé/accord/preset, les CC relatifs/conti
 profils/import-export et les bibliothèques/scopes étendus de gammes/presets ne sont pas
 des critères de la V2. Ratchet attend un scheduler de retrigger annulable par génération.
 CV, réseau, Scala, microtonalité, MPE et MIDI 2.0 restent hors périmètre.
+
+## Porte 5 — V2.1 surface de performance et Force to Scale
+
+### Critères logiciels
+
+- [x] La variante coinstallable porte le libellé « Interval Tablet V2 », le package
+  `dev.intervaltablet.instrumented` et la version `0.2.1-dev-instrumented` ; la V1
+  `dev.intervaltablet.debug` reste installée en `0.1.0-dev-debug`.
+- [x] Les neuf pads gardent des cibles tactiles d’au moins 48 dp et la scène portrait
+  plafonne leur hauteur pour rendre la réduction immédiatement visible.
+- [x] Les dix variantes d’accords sont affichées simultanément en deux rangées sur la
+  page de performance, sans ouvrir la Console.
+- [x] Treize gammes standards sont disponibles sur la scène et Force to Scale quantifie
+  les notes générées vers la note la plus proche, égalité vers le bas.
+- [x] PassThru reste inchangé, les notes tenues conservent leur release exacte et le
+  réglage est restauré par Settings v5, Preset v4 et banque v3.
+- [x] Le panneau Synthé expose séparément temps, feedback et mix du delay ; l’aperçu
+  continu et le commit de fin de geste utilisent le patch existant.
+- [x] Le gate complet domaine, natif, application, Lint, assemblages et structure passe
+  sans nouvel avertissement important.
+- [x] La suite instrumentée V2.1 finale passe sur SM-X620 et la tablette est nettoyée de
+  son package de test temporaire.
+
+Les périphériques USB MIDI réels, TalkBack, vrai multi-touch, 90 Hz soutenu, loopback,
+hotplug et soak audio restent des validations matérielles distinctes.

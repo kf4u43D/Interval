@@ -108,6 +108,10 @@ Les CC tenus utilisent un registre `CcGateLease` distinct contenant source logiq
 
 Cette séparation garantit qu’un changement de mode après le Note On ne réinterprète jamais son Note Off et que les accords restent symétriques sans imposer au routeur de connaître la logique musicale.
 
+Force to Scale appartient exclusivement au reducer de l’instrument. Il quantifie les
+notes générées par ses actions, mais un message Note On/Off transmis en `PassThru` conserve
+strictement sa hauteur et sa route d’origine.
+
 ## Modes
 
 - Off : les messages mappés déclenchent leurs fonctions ; les autres sont supprimés.

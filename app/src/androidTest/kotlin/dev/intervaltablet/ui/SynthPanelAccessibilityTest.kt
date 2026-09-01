@@ -96,6 +96,8 @@ class SynthPanelAccessibilityTest {
             SynthParameter.SUSTAIN,
             SynthParameter.RELEASE,
             SynthParameter.CHORUS_MIX,
+            SynthParameter.DELAY_TIME,
+            SynthParameter.DELAY_FEEDBACK,
             SynthParameter.DELAY_MIX,
             SynthParameter.REVERB_MIX,
             SynthParameter.MASTER,
@@ -116,6 +118,37 @@ class SynthPanelAccessibilityTest {
             assertNotNull(committedPatch)
             assertEquals(0.8f, previewedPatch?.pulseMix ?: 0f, 0.001f)
             assertEquals(0.8f, committedPatch?.pulseMix ?: 0f, 0.001f)
+            assertEquals(listOf("preview", "commit"), events)
+        }
+
+        events.clear()
+        composeRule.onNodeWithTag(
+            synthSliderTestTag(SynthParameter.DELAY_TIME.name),
+            useUnmergedTree = true,
+        ).performSemanticsAction(SemanticsActions.SetProgress) { setProgress ->
+            setProgress(0.5f)
+        }
+        val expectedDelayTime = logarithmicSliderValue(
+            position = 0.5f,
+            minimum = SynthParameter.DELAY_TIME.minimum,
+            maximum = SynthParameter.DELAY_TIME.maximum,
+        )
+        composeRule.runOnIdle {
+            assertEquals(expectedDelayTime, previewedPatch?.delayTimeSeconds ?: 0f, 0.001f)
+            assertEquals(expectedDelayTime, committedPatch?.delayTimeSeconds ?: 0f, 0.001f)
+            assertEquals(listOf("preview", "commit"), events)
+        }
+
+        events.clear()
+        composeRule.onNodeWithTag(
+            synthSliderTestTag(SynthParameter.DELAY_FEEDBACK.name),
+            useUnmergedTree = true,
+        ).performSemanticsAction(SemanticsActions.SetProgress) { setProgress ->
+            setProgress(0.72f)
+        }
+        composeRule.runOnIdle {
+            assertEquals(0.72f, previewedPatch?.delayFeedback ?: 0f, 0.001f)
+            assertEquals(0.72f, committedPatch?.delayFeedback ?: 0f, 0.001f)
             assertEquals(listOf("preview", "commit"), events)
         }
 

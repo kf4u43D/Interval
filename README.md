@@ -7,7 +7,7 @@ Le comportement cible est documenté à partir des fonctions observables décrit
 ## Périmètre actuel
 
 - Navigation par degrés de gamme avec les neuf actions `-4 … 0 … +4`.
-- Gammes 12-TET seulement ; aucune microtonalité dans ce cycle.
+- Treize gammes standards 12-TET et Force to Scale ; aucune microtonalité dans ce cycle.
 - MIDI USB entrant et sortant, sélection des ports, mapping notes/CC, panique MIDI.
 - Modes de routage `Off`, `Active`, `Active Last Note` et `PassThru`.
 - Tone Row : enregistrement, lecture manuelle, séquence automatique, transformations principales
@@ -21,12 +21,14 @@ Le comportement cible est documenté à partir des fonctions observables décrit
   `MUTED`) et strummer tactile pour égrener le voicing courant.
 - Horloge MIDI **entrante**, Start, Stop et Continue.
 - Synthèse interne optionnelle : patch typé de 16 paramètres, oscillateurs soustractifs,
-  filtre, ADSR, chorus, delay, réverbération et panneau de contrôle non modal.
-- Interface paysage adaptée à une tablette 10–11 pouces.
+  filtre, ADSR, chorus, temps/feedback/mix du delay, réverbération et panneau non modal.
+- Interface portrait/paysage adaptée à une tablette 10–11 pouces, avec pads compacts et
+  les dix variantes d’accords accessibles sur la page principale.
 
 Rest, Random Step et Ratchet dans la séquence, l'horloge/transport MIDI sortants, Song
-Position Pointer, le catalogue étendu d'actions mappables, les gammes/presets étendus et
-l'optimisation soutenue à 90 Hz restent différés après cette V2. CV, USB audio
+Position Pointer, le catalogue étendu d'actions mappables, les gammes personnalisées,
+les scopes de presets étendus et l'optimisation soutenue à 90 Hz restent différés après
+cette V2.1. CV, USB audio
 multicanal, Wi‑Fi/RTP-MIDI, Ableton Link, Bluetooth MIDI, Scala/MPE/MIDI 2.0 et
 microtonalité restent hors périmètre.
 
@@ -70,6 +72,7 @@ Sous Windows PowerShell :
    - `codex/prompts/02_tone_row_transport.md`
    - `codex/prompts/03_audio_ui_hardening.md`
    - `codex/prompts/04_v2_performance_midi_learn.md`
+   - `codex/prompts/05_v2_1_performance_surface.md`
 3. Utiliser le lanceur d'étape correspondant pour exécuter un seul lot en mode écriture
    contrôlé.
 
@@ -82,12 +85,13 @@ L’état du programme de développement est conservé dans `.codex/state.json` 
 - `app/src/main/cpp/` : moteur temps réel Oboe et DSP sans allocation dans le callback.
 - `native-tests/` : tests DSP compilables sur l’hôte sans SDK Android.
 - `docs/` : spécifications, traçabilité du guide, protocole matériel, architecture et validation.
-- `codex/prompts/` : quatre lots autonomes et significatifs.
+- `codex/prompts/` : cinq lots autonomes et significatifs.
 
 ## État d'implémentation
 
-Les trois étapes du **MVP logiciel** et l'étape 4 de la **V2** sont terminées depuis le
-1er septembre 2026. La certification matérielle étendue reste partielle et séparée de
+Les trois étapes du **MVP logiciel**, l'étape 4 de la **V2** et l'étape 5 de la **V2.1**
+sont terminées depuis le 1er septembre 2026. La certification matérielle étendue reste
+partielle et séparée de
 cette clôture. Les neuf actions tactiles
 et mappées, les accords, Tone Row et le
 transport rejoignent des reducers déterministes. Tone Row couvre l'enregistrement de 5,
@@ -111,6 +115,12 @@ logique. L'éditeur MIDI Learn maintient une baseline et un brouillon : la prem
 On ou le premier CC capturé est consommé avant rappel/routage, les conflits exacts exigent
 un remplacement explicite, et seul Save installe le mapping. Cancel ne modifie ni la
 session ni les presets existants.
+
+La V2.1 rend ses fonctions immédiatement visibles : l’application coinstallable porte le
+nom « Interval Tablet V2 », les pads portrait sont plus compacts, les dix accords restent
+affichés en deux rangées et les gammes standards se sélectionnent sur la scène. Force to
+Scale quantifie les notes générées vers la gamme active, sans altérer le MIDI PassThru.
+Le panneau Synthé expose séparément temps, feedback et mix du delay.
 
 La session de travail et une banque interne de 128 presets sont persistées avec migration
 de schéma. Program Change rappelle le slot zéro-based correspondant sur le canal d'entrée
@@ -136,8 +146,8 @@ Kotlin pur ; le C++ ne les duplique pas.
 Le moniteur interne est piloté par un `SynthPatch` Kotlin immutable dont les seize
 paramètres possèdent des identifiants filaires explicites `0…15`. Le cutoff canonique est
 borné à `20 Hz…20 kHz`, puis le DSP respecte également le plafond sûr du sample rate
-négocié. Ce patch global relève de Settings v4 : il est distinct des presets musicaux v3
-et de leur banque v2, est rejoué après chaque démarrage audio accepté ainsi qu'après une
+négocié. Ce patch global relève de Settings v5 : il est distinct des presets musicaux v4
+et de leur banque v3, est rejoué après chaque démarrage audio accepté ainsi qu'après une
 récupération du stream — y compris détectée par le compteur de redémarrages sans état
 arrêté intermédiaire observé — et n'est pas modifié par Program Change ou Song Select.
 
@@ -162,6 +172,14 @@ module de référence. Les écarts et preuves sont suivis dans
 ## Vérification livrée
 
 Les validations reproductibles sont décrites dans `docs/VERIFICATION_REPORT.md`. Le gate
+V2.1 du 1er septembre 2026 réussit **136 tests domaine sur 12 suites et 161 tests
+application sur 19 suites, soit 297/297**, CTest 2/2, quatre Lint sans issue, tous les
+assemblages et le contrôle des runtimes natifs sur quatre ABI. La réception directe
+SM-X620/API 36 réussit 7/7 en 17,279 s et vérifie notamment les dix accords visibles,
+Force to Scale, les pads compacts et les gestes temps/feedback du delay. La tablette ne
+conserve que la V1 `0.1.0-dev-debug` et la V2.1 `0.2.1-dev-instrumented`.
+
+Le gate
 V2 final du 1er septembre 2026, associé au commit vérifié
 `13c2d7c4915e8da65c5e6898daf8ee9a5f253e75`, réussit **131 tests domaine sur 11 suites
 et 160 tests application sur 19 suites, soit 291/291**, sans échec, erreur ni test

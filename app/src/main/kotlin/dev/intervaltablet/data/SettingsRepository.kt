@@ -24,6 +24,7 @@ private val ROOT = intPreferencesKey("root_pitch_class")
 private val SCALE = stringPreferencesKey("scale_id")
 private val CHORD = stringPreferencesKey("chord_id")
 private val PAD_ARTICULATION = stringPreferencesKey("pad_articulation")
+private val FORCE_TO_SCALE = booleanPreferencesKey("force_to_scale")
 private val PASS_MODE = stringPreferencesKey("pass_through_mode")
 private val RANGE_MIN = intPreferencesKey("range_min")
 private val RANGE_MAX = intPreferencesKey("range_max")
@@ -61,6 +62,7 @@ data class StoredSettings(
     val scaleId: String = "major",
     val chordId: String = "off",
     val padArticulation: PadArticulation = PadArticulation.ARPEGGIATED,
+    val forceToScale: Boolean = false,
     val passThroughMode: PassThroughMode = PassThroughMode.ACTIVE,
     val rangeMin: Int = 36,
     val rangeMax: Int = 95,
@@ -98,9 +100,10 @@ data class StoredSettings(
     }
 }
 
-const val CURRENT_SETTINGS_SCHEMA: Int = 4
+const val CURRENT_SETTINGS_SCHEMA: Int = 5
 private const val PAD_ARTICULATION_SETTINGS_SCHEMA: Int = 3
 private const val SYNTH_PATCH_SETTINGS_SCHEMA: Int = 4
+private const val FORCE_TO_SCALE_SETTINGS_SCHEMA: Int = 5
 
 /** Pure decoder kept separate from DataStore I/O so migrations and corrupt values are testable. */
 internal fun decodeStoredSettings(preferences: Preferences): StoredSettings {
@@ -124,6 +127,11 @@ internal fun decodeStoredSettings(preferences: Preferences): StoredSettings {
             decodePadArticulation(preferences[PAD_ARTICULATION], storedChordId)
         } else {
             inferLegacyPadArticulation(storedChordId)
+        },
+        forceToScale = if (storedSchema >= FORCE_TO_SCALE_SETTINGS_SCHEMA) {
+            preferences[FORCE_TO_SCALE] ?: false
+        } else {
+            false
         },
         passThroughMode = runCatching {
             PassThroughMode.valueOf(preferences[PASS_MODE] ?: PassThroughMode.ACTIVE.name)
@@ -211,6 +219,7 @@ internal fun writeStoredSettings(preferences: MutablePreferences, settings: Stor
     preferences[SCALE] = settings.scaleId
     preferences[CHORD] = settings.chordId
     preferences[PAD_ARTICULATION] = settings.padArticulation.toStoredId()
+    preferences[FORCE_TO_SCALE] = settings.forceToScale
     preferences[PASS_MODE] = settings.passThroughMode.name
     preferences[RANGE_MIN] = settings.rangeMin
     preferences[RANGE_MAX] = settings.rangeMax
@@ -263,6 +272,7 @@ private fun StoredSettings.toWorkingPresetSnapshot(): PerformancePresetSnapshot 
             scaleId = scaleId,
             chordId = chordId,
             padArticulation = padArticulation,
+            forceToScale = forceToScale,
             rangeMin = rangeMin,
             rangeMax = rangeMax,
             solfegeWrap = solfegeWrap,

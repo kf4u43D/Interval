@@ -15,13 +15,14 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 const val PRESET_SLOT_COUNT: Int = 128
-const val CURRENT_PRESET_SCHEMA: Int = 3
+const val CURRENT_PRESET_SCHEMA: Int = 4
 
 data class MusicalContextSnapshot(
     val rootPitchClass: Int = 0,
     val scaleId: String = "major",
     val chordId: String = "off",
     val padArticulation: PadArticulation = PadArticulation.ARPEGGIATED,
+    val forceToScale: Boolean = false,
     val rangeMin: Int = 36,
     val rangeMax: Int = 95,
     val solfegeWrap: Boolean = true,
@@ -170,7 +171,7 @@ data class PresetBank(
 
 /** Bounded, versioned JSON codec shared by DataStore autosave and user preset slots. */
 object PerformancePresetSerializer {
-    private const val BANK_SCHEMA: Int = 2
+    private const val BANK_SCHEMA: Int = 3
     private const val MAX_SERIALIZED_CHARS: Int = 4 * 1_048_576
     private val json = Json {
         encodeDefaults = true
@@ -179,7 +180,7 @@ object PerformancePresetSerializer {
     }
 
     fun encode(preset: PerformancePresetSnapshot): String {
-        val serialized = json.encodeToString(preset.toStoredV3())
+        val serialized = json.encodeToString(preset.toStoredV4())
         require(serialized.length <= MAX_SERIALIZED_CHARS) { "Preset exceeds DataStore payload bound" }
         return serialized
     }
@@ -191,16 +192,17 @@ object PerformancePresetSerializer {
         when (element.jsonObject["schemaVersion"]?.jsonPrimitive?.intOrNull) {
             1 -> json.decodeFromString<StoredPerformancePresetV1>(serialized).toSnapshot()
             2 -> json.decodeFromString<StoredPerformancePresetV2>(serialized).toSnapshot()
-            CURRENT_PRESET_SCHEMA -> json.decodeFromString<StoredPerformancePresetV3>(serialized).toSnapshot()
+            3 -> json.decodeFromString<StoredPerformancePresetV3>(serialized).toSnapshot()
+            CURRENT_PRESET_SCHEMA -> json.decodeFromString<StoredPerformancePresetV4>(serialized).toSnapshot()
             else -> error("Unsupported preset schema")
         }
     }.getOrNull()
 
     fun encodeBank(bank: PresetBank): String {
-        val stored = StoredPresetBankV2(
+        val stored = StoredPresetBankV3(
             schemaVersion = BANK_SCHEMA,
             slots = bank.presets.entries.sortedBy { it.key }.map { (slot, preset) ->
-                StoredPresetSlotV2(slot = slot, preset = preset.toStoredV3())
+                StoredPresetSlotV3(slot = slot, preset = preset.toStoredV4())
             },
         )
         val serialized = json.encodeToString(stored)
@@ -221,8 +223,15 @@ object PerformancePresetSerializer {
                     putPresetSlot(presets, slot.slot, slot.preset.toSnapshot())
                 }
             }
-            BANK_SCHEMA -> {
+            2 -> {
                 val stored = json.decodeFromString<StoredPresetBankV2>(serialized)
+                require(stored.slots.size <= PRESET_SLOT_COUNT)
+                stored.slots.forEach { slot ->
+                    putPresetSlot(presets, slot.slot, slot.preset.toSnapshot())
+                }
+            }
+            BANK_SCHEMA -> {
+                val stored = json.decodeFromString<StoredPresetBankV3>(serialized)
                 require(stored.slots.size <= PRESET_SLOT_COUNT)
                 stored.slots.forEach { slot ->
                     putPresetSlot(presets, slot.slot, slot.preset.toSnapshot())
@@ -240,6 +249,7 @@ private data class StoredMusicalContext(
     val scaleId: String = "major",
     val chordId: String = "off",
     val padArticulation: String? = null,
+    val forceToScale: Boolean = false,
     val rangeMin: Int = 36,
     val rangeMax: Int = 95,
     val solfegeWrap: Boolean = true,
@@ -296,6 +306,17 @@ private data class StoredPerformancePresetV2(
 
 @Serializable
 private data class StoredPerformancePresetV3(
+    val schemaVersion: Int = 3,
+    val name: String = "Init",
+    val musicalContext: StoredMusicalContext = StoredMusicalContext(),
+    val routing: StoredRouting = StoredRouting(),
+    val toneRow: StoredToneRow = StoredToneRow(),
+    val transport: StoredTransport = StoredTransport(),
+    val serializedMidiMapping: String,
+)
+
+@Serializable
+private data class StoredPerformancePresetV4(
     val schemaVersion: Int = CURRENT_PRESET_SCHEMA,
     val name: String = "Init",
     val musicalContext: StoredMusicalContext = StoredMusicalContext(),
@@ -353,14 +374,27 @@ private data class StoredPresetSlotV2(
     val preset: StoredPerformancePresetV3,
 )
 
-private fun PerformancePresetSnapshot.toStoredV3(): StoredPerformancePresetV3 {
-    return StoredPerformancePresetV3(
+@Serializable
+private data class StoredPresetBankV3(
+    val schemaVersion: Int,
+    val slots: List<StoredPresetSlotV3>,
+)
+
+@Serializable
+private data class StoredPresetSlotV3(
+    val slot: Int,
+    val preset: StoredPerformancePresetV4,
+)
+
+private fun PerformancePresetSnapshot.toStoredV4(): StoredPerformancePresetV4 {
+    return StoredPerformancePresetV4(
         name = name,
         musicalContext = StoredMusicalContext(
             rootPitchClass = musicalContext.rootPitchClass,
             scaleId = musicalContext.scaleId,
             chordId = musicalContext.chordId,
             padArticulation = musicalContext.padArticulation.toStoredId(),
+            forceToScale = musicalContext.forceToScale,
             rangeMin = musicalContext.rangeMin,
             rangeMax = musicalContext.rangeMax,
             solfegeWrap = musicalContext.solfegeWrap,
@@ -407,6 +441,18 @@ private fun StoredPerformancePresetV2.toSnapshot(): PerformancePresetSnapshot {
 }
 
 private fun StoredPerformancePresetV3.toSnapshot(): PerformancePresetSnapshot {
+    require(schemaVersion == 3)
+    return PerformancePresetSnapshot(
+        name = name,
+        musicalContext = musicalContext.toSnapshot(),
+        routing = routing.toSnapshot(),
+        toneRow = toneRow.toSnapshot(),
+        transport = transport.toSnapshot(),
+        midiMapping = requireNotNull(MidiMappingSerializer.decode(serializedMidiMapping)),
+    )
+}
+
+private fun StoredPerformancePresetV4.toSnapshot(): PerformancePresetSnapshot {
     require(schemaVersion == CURRENT_PRESET_SCHEMA)
     return PerformancePresetSnapshot(
         name = name,
@@ -462,6 +508,7 @@ private fun StoredMusicalContext.toSnapshot(): MusicalContextSnapshot = MusicalC
     scaleId = scaleId,
     chordId = chordId,
     padArticulation = decodePadArticulation(padArticulation, chordId),
+    forceToScale = forceToScale,
     rangeMin = rangeMin,
     rangeMax = rangeMax,
     solfegeWrap = solfegeWrap,

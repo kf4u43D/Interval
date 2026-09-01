@@ -25,6 +25,7 @@ fun IntervalTabletApp(viewModel: IntervalTabletViewModel = viewModel()) {
         onSetScale = viewModel::setScale,
         onSetRoot = viewModel::setRoot,
         onSetChord = viewModel::setChord,
+        onSetForceToScale = viewModel::setForceToScale,
         onSetRange = viewModel::setRange,
         onSetWrap = viewModel::setWrap,
         onSetInputChannel = viewModel::setInputChannel,

@@ -137,7 +137,7 @@ Le détail et les preuves visuelles sont consignés dans
   deux sens, vélocité sur l'axe secondaire, multi-pointeur, hystérésis, clavier/TalkBack
   et une origine/release one-shot par corde.
 - [x] Neuf pads conservés comme nœuds tactiles/focus/sémantiques distincts d'au moins
-  72 dp, avec dessin mis en cache ; timeline et sélection de séquence isolées.
+  48 dp, avec dessin mis en cache ; timeline et sélection de séquence isolées.
 - [x] Ouverture Oboe Exclusive avec repli Shared, sample rate négocié, reprise hors
   callback, générations de stream et intention start/stop sérialisée.
 - [x] File SPSC et drain callback borné, Panic d'urgence sur overflow, rejet des événements
@@ -155,7 +155,7 @@ Le détail et les preuves visuelles sont consignés dans
 - [x] Correctif anti-saturation natif : temps-to-target ADSR à plusieurs sample rates,
   mix d'oscillateurs normalisé, reverb compensée avec all-pass canoniques et limiteur
   exactement transparent sous son knee, sans abaisser arbitrairement le master.
-- [x] Settings v4, presets v3 et banque v2 avec articulation et patch Synthé stables ;
+- [x] Settings v5, presets v4 et banque v3 avec articulation, Force to Scale et patch Synthé stables ;
   les migrations historiques préservent le rendu (`Off` → `ARPEGGIATED`, accord actif
   → `STACKED`) et initialisent les paramètres audio absents à leurs valeurs sûres.
 - [x] Variantes Android séparées : `benchmark` minifiée/profileable pour les mesures AOT
@@ -307,6 +307,28 @@ une capture depuis un périphérique MIDI USB réel.
 Restent ouverts : périphériques USB MIDI/Learn et hotplug réels, rendu soutenu à 90 Hz,
 vrai multi-touch et TalkBack, écoute comparative/loopback, hotplug audio et soak de
 60 minutes. L'avertissement SDK console XML v3/v4 n'a produit aucune issue Lint.
+
+## Étape 5 — V2.1 surface de performance et Force to Scale
+
+**V2.1 logicielle terminée et reçue sur SM-X620 le 1er septembre 2026.**
+
+- [x] Variante coinstallable renommée « Interval Tablet V2 » et versionnée `0.2.1` ;
+  la V1 `dev.intervaltablet.debug` reste installée en `0.1.0` avec ses données.
+- [x] Surface harmonique permanente avec treize gammes, Force to Scale et les dix accords
+  répartis en deux rangées ; pads minimum 48 dp et scène portrait plafonnée.
+- [x] Quantification déterministe des notes générées, égalité vers le bas, PassThru
+  inchangé et ownership des notes tenues préservé.
+- [x] Settings v5, Preset v4 et banque v3 migrent les formats historiques avec Force to
+  Scale désactivé par défaut.
+- [x] Panneau Synthé complété par temps, feedback et mix du delay, avec aperçu continu et
+  commit persistant déjà utilisés par les autres paramètres.
+- [x] Gate : 136/136 domaine sur 12 suites, 161/161 application sur 19 suites, soit
+  297/297 ; CTest 2/2, quatre Lint sans issue, tous les assemblages et quatre ABI validés.
+- [x] Réception directe SM-X620/API 36 : 7/7 en 17,279 s. L’arbre UI confirme les dix
+  accords et des pads de 272 px de haut sur l’écran 1800×2880 ; package de test supprimé.
+
+Les validations USB MIDI réel, TalkBack, vrai multi-touch, 90 Hz soutenu, loopback,
+hotplug et soak audio restent ouvertes sans bloquer cette livraison logicielle.
 
 ## Dépôt
 

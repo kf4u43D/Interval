@@ -817,6 +817,7 @@ class PerformanceCoordinator(
             is InstrumentAction.SetWrap -> timestampNanos
             is InstrumentAction.SetChord -> timestampNanos
             is InstrumentAction.SetPadArticulation -> timestampNanos
+            is InstrumentAction.SetForceToScale -> timestampNanos
             is InstrumentAction.SetOutputChannel -> timestampNanos
             is InstrumentAction.Panic -> timestampNanos
         }

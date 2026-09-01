@@ -903,6 +903,16 @@ class IntervalTabletViewModelTest {
             PadArticulation.STACKED,
             fixture.settingsStore.updates.last().workingPreset?.musicalContext?.padArticulation,
         )
+
+        fixture.viewModel.setForceToScale(true)
+        drain()
+        scheduler.advanceTimeBy(200L)
+        drain()
+        assertTrue(fixture.viewModel.uiState.value.instrument.config.forceToScale)
+        assertTrue(
+            requireNotNull(fixture.settingsStore.updates.last().workingPreset)
+                .musicalContext.forceToScale,
+        )
     }
 
     @Test

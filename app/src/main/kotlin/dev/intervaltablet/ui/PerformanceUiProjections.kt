@@ -16,6 +16,7 @@ import dev.intervaltablet.domain.MidiNoteRange
 import dev.intervaltablet.domain.PadArticulation
 import dev.intervaltablet.domain.PassThroughMode
 import dev.intervaltablet.domain.PitchMoveBoundary
+import dev.intervaltablet.domain.ScaleDefinition
 import dev.intervaltablet.domain.SynthPatch
 import dev.intervaltablet.domain.ToneRowMode
 import dev.intervaltablet.domain.midiNoteName
@@ -68,7 +69,9 @@ internal data class PerformanceUtilityUiState(
 
 @Immutable
 internal data class PerformanceControlsUiState(
+    val scale: ScaleDefinition,
     val chord: ChordDefinition,
+    val forceToScale: Boolean,
     val mode: PassThroughMode,
     val audioMonitorEnabled: Boolean,
     val audioAvailable: Boolean,
@@ -335,7 +338,9 @@ internal fun AppUiState.toPerformanceUtilityUiState(): PerformanceUtilityUiState
 
 internal fun AppUiState.toPerformanceControlsUiState(): PerformanceControlsUiState {
     return PerformanceControlsUiState(
+        scale = instrument.config.scale,
         chord = instrument.config.chord,
+        forceToScale = instrument.config.forceToScale,
         mode = passThroughMode,
         audioMonitorEnabled = audioMonitorEnabled,
         audioAvailable = audioAvailable,
