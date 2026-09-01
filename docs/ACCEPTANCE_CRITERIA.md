@@ -161,43 +161,48 @@ sa certification matérielle globale demeure partielle.
 
 ## Porte 4 — V2 performance et MIDI Learn
 
-Les cases restent volontairement ouvertes jusqu'au gate complet du lot. La présence du
-code ou d'un test ciblé ne remplace pas la preuve combinée et aucun nouveau total n'est
-déduit du gate MVP archivé ci-dessus.
+**Porte logicielle acceptée le 1er septembre 2026.** Le gate combiné vérifie le commit
+`13c2d7c4915e8da65c5e6898daf8ee9a5f253e75`. Les résultats MVP de la porte 3 ci-dessus
+restent une archive antérieure et ne sont pas additionnés aux chiffres V2.
 
-### Critères logiciels à revalider
+### Critères logiciels validés
 
-- [ ] `Same Interval` répète le dernier déplacement diatonique et `Same Pitch` le dernier
+- [x] `Same Interval` répète le dernier déplacement diatonique et `Same Pitch` le dernier
   écart chromatique réellement émis, avec les oracles `+3→Same` et D→E→F♯.
-- [ ] Random Interval joue immédiatement un mouvement déterministe `-14…+14` sans changer
+- [x] Random Interval joue immédiatement un mouvement déterministe `-14…+14` sans changer
   le mode Tone Row ; même graine et mêmes actions donnent la même sortie.
-- [ ] Chromatic Shift est silencieux et momentané, s'additionne par source et disparaît
+- [x] Chromatic Shift est silencieux et momentané, s'additionne par source et disparaît
   correctement sur Note Off, passage CC sous seuil, purge et Panic, sans Note Off perdu.
-- [ ] Un second Record pendant l'enregistrement abandonne la prise et revient à `Idle`.
-- [ ] La navigation manuelle reste possible en `Paused`, Continue repart de cette position
+- [x] Un second Record pendant l'enregistrement abandonne la prise et revient à `Idle`.
+- [x] La navigation manuelle reste possible en `Paused`, Continue repart de cette position
   et la vélocité d'une Note MIDI n'affecte que l'émission courante.
-- [ ] Tone Row expose Prime, Retro, Random, Pendulum, Auto-Transpose haut/bas et
+- [x] Tone Row expose Prime, Retro, Random, Pendulum, Auto-Transpose haut/bas et
   Auto-Translate haut/bas ; Random conserve le signe dans `0…2×|pas|` et démarre au
   premier élément.
-- [ ] Les modes automatiques accumulent un demi-ton/degré par cycle logique ; Pause et
+- [x] Les modes automatiques accumulent un demi-ton/degré par cycle logique ; Pause et
   Continue conservent la phase, tandis que Restart/Reset restaurent l'accumulation neutre.
-- [ ] Le reducer MIDI Learn pur couvre baseline, brouillon, armement, candidat, canal
+- [x] Le reducer MIDI Learn pur couvre baseline, brouillon, armement, candidat, canal
   reçu/Omni, seuil CC `1…127`, collision exacte, recouvrement Omni, suppression, reset,
   Save, Cancel et baseline obsolète.
-- [ ] Une capture Note On/CC est consommée avant politique de preset et routage : elle ne
+- [x] Une capture Note On/CC est consommée avant politique de preset et routage : elle ne
   joue pas, ne traverse pas et ne rappelle aucun preset.
-- [ ] Armer provoque Panic ; Save installe/persiste une seule fois le mapping complet et
+- [x] Armer provoque Panic ; Save installe/persiste une seule fois le mapping complet et
   Cancel n'écrit rien. Lock, lifecycle, perte de source et overflow ferment sans conserver
   de capture transitoire.
-- [ ] Le panneau Compose dédié expose état d'attente, candidat, conflit/recouvrement,
+- [x] Le panneau Compose dédié expose état d'attente, candidat, conflit/recouvrement,
   actions Add/Replace/Delete/Reset/Save/Cancel et sémantiques accessibles.
-- [ ] Mapping v1 reste lisible et les presets existants conservent leur mapping jusqu'à
+- [x] Mapping v1 reste lisible et les presets existants conservent leur mapping jusqu'à
   une nouvelle sauvegarde explicite du slot.
-- [ ] Toutes les suites des portes 1 à 3, Lint et les assemblages concernés repassent sans
-  régression ; les résultats exacts sont consignés dans `docs/VERIFICATION_REPORT.md`.
+- [x] Toutes les suites des portes 1 à 3, Lint et les assemblages concernés repassent sans
+  régression : 131/131 domaine sur 11 suites et 160/160 application sur 19 suites, soit
+  291/291, plus CTest 2/2, quatre Lint sans issue et toutes les variantes demandées vertes.
+- [x] Le gate principal et `scripts/verify.ps1` réussissent avec contrôle des quatre ABI ;
+  les APK Debug, Release non signé, Benchmark, Instrumented et AndroidTest sont produits.
 
 ### Réception et performance encore ouvertes
 
+- [x] Recevoir le panneau MIDI Learn sur SM-X620/API 36 sans périphérique USB : le test
+  direct final couvre conflit→Replace→Save puis Cancel dans une suite 7/7 en 15,603 s.
 - [ ] Exécuter MIDI Learn avec un contrôleur USB réel, canal exact puis Omni, Note et CC,
   et vérifier par moniteur externe que le message capturé ne sort jamais.
 - [ ] Recevoir TalkBack, vrai multi-touch et les fermetures lifecycle/Performance Lock sur

@@ -129,27 +129,26 @@ sur Android réel.
 
 ## État de preuve du lot V2
 
-Le gate chiffré ci-dessous est l'archive du MVP. La V2 ajoute des oracles dans
+La V2 ajoute des oracles dans
 `IntervalReducerTest`, `ToneRowReducerTest`, `MidiMappingEditorTest`,
 `PerformanceCoordinatorTest`, `IntervalTabletViewModelTest` et les tests de présentation.
-Un document ne les déclare réussis qu'après exécution du gate complet et consignation du
-résultat dans `docs/VERIFICATION_REPORT.md`.
-
-La revalidation V2 doit notamment prouver D→E→Same Pitch→F♯, `+3→Same`, les tirages
+La revalidation finale prouve notamment D→E→Same Pitch→F♯, `+3→Same`, les tirages
 reproductibles, les shifts Note/CC empilés, Record→Record, Pause→Move→Continue, la
-vélocité live non persistée, les huit modes et l'atomicité Save/Cancel. Elle doit rejouer
-toutes les suites des portes 1 à 3.
+vélocité live non persistée, les huit modes et l'atomicité Save/Cancel, tout en rejouant
+les suites des portes 1 à 3.
 
-Le gate revalidé le 31 août réussit 234/234 tests JVM, soit 94 domaine et 140 application,
-2/2 tests natifs et 6/6 tests instrumentés sur Samsung SM-X620/API 36. AUDIO-01 y réalise
-dix cycles start/stop à 48 kHz, burst 96, buffer 192, profondeur maximale de file 17,
-sans drop, restart, code d'erreur ni xrun. Le gate vérifie aussi que chaque ABI contenant
+Le gate V2 réussit 291/291 tests Kotlin/JVM, soit 131 domaine et 160 application, ainsi
+que 2/2 suites natives. Les Lint Debug, Release, Benchmark et Instrumented indiquent tous
+`No issues found.` et les quatre variantes correspondantes sont assemblées. La suite
+directe sur Samsung SM-X620/API 36 réussit 7/7 en 15,603 s ; son septième scénario exerce
+le panneau MIDI Learn accessible, le conflit, Replace, Save et Cancel. AUDIO-01 conserve
+ses dix cycles start/stop et le gate vérifie toujours que chaque ABI contenant
 `libinterval_audio.so` embarque `liboboe.so` et `libc++_shared.so`.
 
 Cette campagne ne valide pas USB MIDI, Clock physique, Program/Song Select depuis un
 contrôleur, TalkBack, vrai multi-touch, qualité audio subjective, latence loopback, xruns
-sous charge, hotplug audio ni soak audio de 60 minutes. La porte matérielle globale reste
-donc ouverte.
+sous charge, hotplug audio, rendu soutenu dans le budget 90 Hz ni soak audio de
+60 minutes. La porte matérielle globale reste donc ouverte.
 
 ## Mesure de rendu reproductible
 

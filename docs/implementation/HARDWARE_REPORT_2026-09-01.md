@@ -6,7 +6,28 @@ Ce rapport clôt le MVP logiciel Interval Tablet sur Samsung SM-X620/API 36. Il 
 aucun identifiant réseau. Il distingue les preuves reproductibles, la réception utilisateur
 du contrôle Synthé continu et les protocoles matériels qui n'ont pas pu être exécutés.
 
-## Résultat final
+## Addendum V2 — Étape 4
+
+Le lot V2 vérifié correspond au commit de code
+`13c2d7c4915e8da65c5e6898daf8ee9a5f253e75`. Il étend la clôture logicielle sans
+réinterpréter les résultats matériels historiques ci-dessous.
+
+| Contrôle V2 | Résultat | Preuve ou limite |
+|---|---|---|
+| Kotlin/JVM | Réussi | 131/131 domaine + 160/160 application = 291/291 |
+| Natif hôte | Réussi | 2/2 suites |
+| Lint Android | Réussi | Debug, Release, Benchmark et Instrumented : `No issues found.` |
+| Variantes Android | Réussi | Debug, Release non signé, Benchmark et Instrumented assemblées |
+| Suite directe SM-X620/API 36 | Réussi | 7/7, 0 échec, 15,603 s |
+| MIDI Learn UI | Réussi sur le contrat instrumenté | attente, candidat, conflit, Replace, Save, Cancel et sémantiques accessibles |
+
+La commande directe et les sept scénarios sont archivés dans
+[`evidence/2026-09-01-sm-x620/v2-stage4-instrumentation.txt`](evidence/2026-09-01-sm-x620/v2-stage4-instrumentation.txt).
+Cette instrumentation n'utilise aucun périphérique MIDI USB réel. Elle ne ferme donc ni
+la découverte/connexion/hotplug USB MIDI, ni TalkBack et le vrai multi-touch, ni la dette
+de rendu soutenu à 90 Hz, ni le loopback/hotplug audio ou le soak de 60 minutes.
+
+## Résultat final du MVP archivé
 
 | Contrôle | Résultat | Preuve ou limite |
 |---|---|---|
@@ -46,6 +67,7 @@ signature et publication ne font pas partie de cette clôture et aucune publicat
 | MIDI Clock, Program Change et Song Select réels | Bloqué matériel | contrôleur MIDI externe absent |
 | Notes tenues pendant hotplug/changement de port | Bloqué matériel | périphérie MIDI USB absente |
 | Vrai multi-touch simultané et TalkBack | Non exécuté | parcours physique dédié non réalisé |
+| Rendu soutenu dans le budget 90 Hz | Dette ouverte | aucune nouvelle campagne V2 ; le budget de 11,11 ms reste non atteint par la campagne archivée |
 | Hotplug/changement de route audio | Non exécuté | scénario de déconnexion contrôlé non réalisé |
 | Latence tactile/MIDI vers audio et loopback | Bloqué matériel | interface et câblage de mesure absents |
 | Écoute comparative anti-saturation | Non exécuté | la confirmation des sliders ne qualifie pas globalement le gain staging |
@@ -53,6 +75,7 @@ signature et publication ne font pas partie de cette clôture et aucune publicat
 
 ## Conclusion
 
-Le MVP logiciel des étapes 1 à 3 est terminé : son code, ses variantes, ses tests et son
-parcours appareil final sont verts. La certification matérielle reste partielle pour les
-protocoles listés ci-dessus ; aucun d'eux n'est présenté comme réussi.
+Le MVP logiciel des étapes 1 à 3 et la tranche logicielle V2 de l'étape 4 sont terminés :
+leurs tests, Lint, variantes et parcours instrumentés sont verts. La certification
+matérielle reste partielle pour les protocoles listés ci-dessus ; aucun d'eux n'est
+présenté comme réussi.

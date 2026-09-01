@@ -161,7 +161,7 @@ Le détail et les preuves visuelles sont consignés dans
 - [x] Variantes Android séparées : `benchmark` minifiée/profileable pour les mesures AOT
   et `instrumented` non minifiée pour les tests UI, chacune dans un package isolé.
 
-### Preuves de clôture logicielle
+### Preuves de clôture logicielle du MVP — archive antérieure à la V2
 
 Le gate final du 1er septembre réussit avec 94/94 tests domaine sur 10 suites et 140/140
 tests JVM application sur 18 suites, soit 234/234 sans échec, erreur ni test ignoré.
@@ -248,9 +248,69 @@ pas des résultats réussis. Ces limites n'impliquent pas un déplacement des re
 C++ : le moteur natif reste le synthétiseur temps réel, tandis que Kotlin demeure
 l'autorité musicale déterministe.
 
+## Étape 4 — V2 performance et MIDI Learn
+
+**V2 logicielle terminée le 1er septembre 2026 ; réception UI tablette acquise, certification
+USB MIDI et matérielle toujours partielle.** Le commit vérifié est
+`13c2d7c4915e8da65c5e6898daf8ee9a5f253e75`.
+
+### Livré
+
+- [x] `Same Interval` répète le dernier mouvement diatonique public, y compris
+  `UndoThenMove`; `Same Pitch` répète le delta de lead entendu et compose correctement
+  une ancre externe ainsi qu'un Chromatic Shift stable, ajouté ou relâché.
+- [x] Random Interval joue immédiatement un pas `-14…+14` déterministe ; Chromatic Shift
+  est silencieux, momentané, empilable et libéré par Note Off, front CC descendant,
+  purge ou Panic, même après remplacement du mapping.
+- [x] Un second Record annule la prise. Tone Row reste navigable en Pause et une Note MIDI
+  remplace seulement la vélocité de l'émission manuelle courante.
+- [x] Les huit parcours Tone Row sont disponibles. Random conserve le signe du mouvement ;
+  Auto-Transpose/Auto-Translate accumulent par cycle, Play Once comptabilise son cycle
+  terminal et Restart/Reset restaurent les accumulations prévues.
+- [x] L'éditeur MIDI Learn pur et son panneau Compose gèrent baseline, brouillon, capture
+  Note/CC, canal exact/Omni, seuil, conflit, recouvrement, Add/Replace/Delete/Reset,
+  Save atomique et Cancel sans persistance.
+- [x] La capture intervient avant Program Change/Song Select et routage. Lifecycle,
+  Performance Lock, perte de source et overflow ferment la transaction sans lease ni
+  brouillon durable.
+- [x] Mapping v1, Settings v4, Preset v3 et banque v2 restent compatibles ; un preset
+  existant ne reçoit le nouveau mapping qu'après resauvegarde explicite de son slot.
+
+### Gate logiciel V2 final
+
+- `doctor.ps1` : 0 erreur et 1 avertissement attendu, `kotlinc` autonome absent.
+- `verify-structure.ps1` : OK ; seuls les fichiers de preuve historiques produisent les
+  avertissements de fins de ligne déjà archivés.
+- Domaine : 131/131 tests sur 11 suites ; application : 160/160 sur 19 suites ; total
+  291/291, sans échec, erreur ni test ignoré.
+- CTest : 2/2. Lint Debug, Release, Benchmark et Instrumented : `No issues found.`
+- Gate principal et variantes Debug, Release non signée, Benchmark, Instrumented et
+  AndroidTest verts ; `verify.ps1` réussit avec contrôle des runtimes sur quatre ABI.
+
+### Réception SM-X620/API 36 et artefacts finaux
+
+La suite directe finale réussit 7/7 en 15,603 s. Elle couvre le parcours MIDI Learn
+conflit→Replace→Save puis Cancel, les sliders Synthé continus, les pads, Tone Row et
+AUDIO-01 avec dix cycles start/stop. Cette réception valide l'UI tablette de Learn, pas
+une capture depuis un périphérique MIDI USB réel.
+
+| Artefact | Taille | SHA-256 |
+|---|---:|---|
+| Debug | 40 596 619 octets | `744f5a08af37861eaecdb8c3b2a7a47b2dda68283929a50d08c3849ee9db5dc4` |
+| Release non signé | 9 199 584 octets | `c91874fb5628f9484673a089287515c27bc3074da74848dc3192ed3bcf971ed8` |
+| Benchmark | 9 207 816 octets | `87b2b48693d19c82bfaf6929695cc645a2a61bf2818780aa434eb603c364ffe2` |
+| Instrumented | 40 317 773 octets | `43adb0eb7a518367c0ce313f62f323217855b55d320609b7fd57c13f82aed029` |
+| Instrumented AndroidTest | 2 543 071 octets | `e78d057e92eeb42085643c098adf476147abf96d0f4e15e64afeee6fd47e711f` |
+
+### Validation matérielle encore requise
+
+Restent ouverts : périphériques USB MIDI/Learn et hotplug réels, rendu soutenu à 90 Hz,
+vrai multi-touch et TalkBack, écoute comparative/loopback, hotplug audio et soak de
+60 minutes. L'avertissement SDK console XML v3/v4 n'a produit aucune issue Lint.
+
 ## Dépôt
 
 Le workspace est un dépôt Git local sur `main` avec le Wrapper Gradle officiel 8.13 et son
-JAR vérifié. Aucun remote, push ou publication n'a été configuré. Aucun état distant n'est
-revendiqué ; l'ajout d'une destination doit suivre séparément
-`docs/REPOSITORY_SETUP.md` lorsqu'une URL de dépôt sera explicitement fournie.
+JAR vérifié. Un remote `origin` existe et le dépôt contient des commits locaux non
+poussés. Aucun push ni publication n'a été effectué, aucune URL n'est consignée ici et
+aucun état distant supplémentaire n'est revendiqué.

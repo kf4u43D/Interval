@@ -86,8 +86,9 @@ L’état du programme de développement est conservé dans `.codex/state.json` 
 
 ## État d'implémentation
 
-Les trois étapes du **MVP logiciel sont terminées** depuis le 1er septembre 2026. La
-certification matérielle étendue reste partielle et séparée de cette clôture. Les neuf actions tactiles
+Les trois étapes du **MVP logiciel** et l'étape 4 de la **V2** sont terminées depuis le
+1er septembre 2026. La certification matérielle étendue reste partielle et séparée de
+cette clôture. Les neuf actions tactiles
 et mappées, les accords, Tone Row et le
 transport rejoignent des reducers déterministes. Tone Row couvre l'enregistrement de 5,
 7 ou 12 classes, la lecture manuelle et automatique, Prime/Retro/Random/Pendulum, les
@@ -160,35 +161,40 @@ module de référence. Les écarts et preuves sont suivis dans
 
 ## Vérification livrée
 
-Les validations reproductibles sont décrites dans `docs/VERIFICATION_REPORT.md`. Le
-dernier gate chiffré ci-dessous est celui du MVP, antérieur au lot V2 ; aucun nouveau
-total V2 n'est revendiqué ici avant la revalidation complète. Ce gate MVP réussit
-**94 tests domaine et 140 tests application, soit 234/234**. Les suites
+Les validations reproductibles sont décrites dans `docs/VERIFICATION_REPORT.md`. Le gate
+V2 final du 1er septembre 2026, associé au commit vérifié
+`13c2d7c4915e8da65c5e6898daf8ee9a5f253e75`, réussit **131 tests domaine sur 11 suites
+et 160 tests application sur 19 suites, soit 291/291**, sans échec, erreur ni test
+ignoré. Les suites
 déterministes couvrent Tone Row/transport, le coordinateur et son acteur hors Main, les
 articulations/strums, le byte stream MIDI, le contrat `SynthPatch`, la persistance et ses
 migrations, les projections UI et le moteur C++/JNI. Une
 variante minifiée `benchmark` et une variante non minifiée `instrumented`, toutes deux
-isolées du package utilisateur, séparent mesure de rendu et tests UI. Le gate complet,
-les 6/6 tests instrumentés courants et les huit passes A/B OFF/ON historiques sur SM-X620
-sont documentés. Le gate vérifie aussi que les runtimes Oboe et C++ accompagnent chaque
-ABI de la bibliothèque audio dans l'APK. Le rapport de vérification détaille les autres
-preuves et leurs limites.
+isolées du package utilisateur, séparent mesure de rendu et tests UI. Les quatre rapports
+Lint indiquent `No issues found.`, CTest réussit 2/2 et le gate principal comme les
+variantes Debug, Release non signée, Benchmark, Instrumented et AndroidTest sont verts.
+`scripts/verify.ps1` contrôle aussi les runtimes Oboe/C++ sur les quatre ABI. Les totaux
+94/140 du MVP et les campagnes antérieures restent archivés, clairement datés, dans le
+rapport de vérification.
 
-Une réception partielle a été effectuée sur Samsung SM-X620/API 36. Elle établit
-l'installation, plusieurs parcours UI, les trois articulations et un balayage du strummer,
-mais pas le MIDI USB/Clock réel, le hotplug, le vrai multi-touch, TalkBack, l'écoute
-comparative, la latence loopback ni le soak audio de 60 minutes ; ces
-validations restent régies par le protocole matériel et ne bloquent plus la clôture du
-MVP logiciel. Le package Release produit reste volontairement non signé ; choix de
+Une réception partielle a été effectuée sur Samsung SM-X620/API 36. La suite directe
+finale réussit 7/7 en 15,603 s : conflit MIDI Learn puis Replace, Save et Cancel, sliders
+Synthé continus, pads, Tone Row et dix cycles audio start/stop. Elle ne valide cependant
+pas le MIDI Learn avec un périphérique USB réel, le hotplug, le vrai multi-touch,
+TalkBack, un rendu soutenu à 90 Hz, l'écoute comparative, la latence loopback ni le soak
+audio de 60 minutes ; ces validations restent régies par le protocole matériel et ne
+bloquent pas la clôture de la V2 logicielle. Le package Release produit reste
+volontairement non signé ; choix de
 licence, identité commerciale, signature et publication sont hors de cette clôture.
 
 ## Dépôt et CI
 
 Le workspace est initialisé comme dépôt Git local sur la branche `main`, avec le Wrapper
-Gradle officiel 8.13 vérifié, et un remote `origin` est configuré. La documentation ne
-déduit aucun état distant de cette seule configuration. `docs/REPOSITORY_SETUP.md` décrit
-les protections de branche. Une CI GitHub Actions et une configuration Dependabot sont
-fournies sans secret ni action de publication.
+Gradle officiel 8.13 vérifié, et un remote `origin` est configuré. Le dépôt contient des
+commits locaux non poussés ; aucun push ni publication n'a été effectué et aucun état
+distant n'est déduit de la seule présence du remote. `docs/REPOSITORY_SETUP.md`
+décrit les protections de branche. Une CI GitHub Actions et une configuration Dependabot
+sont fournies sans secret ni action de publication.
 
 ## Nom, marques et publication
 

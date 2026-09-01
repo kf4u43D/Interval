@@ -191,7 +191,19 @@ L’adaptateur doit et, en porte 1, sait :
 - vider en ordre FIFO les envois déjà acceptés avant la fermeture effective ;
 - ne jamais conserver de référence Android de port après fermeture.
 
-Les contrats de catalogue/génération, les envois ciblés, le reset du parseur et l’ordre du coordinateur sont couverts par les tests locaux. La mailbox destination pure est bornée à 512 opérations et testée pour l’ordre Send/Select, le latest-request-wins, le reset multicanal après saturation et le drain de fermeture. L'acteur du `ViewModel` et l'ordonnanceur interne sont pilotés sur JVM avec horloge, stockage, audio et ports injectés. Le dernier gate chiffré du MVP totalise 94 tests domaine et 140 tests application, soit 234/234 ; il est antérieur au lot V2 et ne vaut pas résultat de sa revalidation. L'adaptateur Android compile dans l'APK ; son `HandlerThread`, les interclassements lifecycle/`StateFlow` réels, l'éditeur Learn sur appareil et les périphériques physiques demandent encore une réception instrumentée sur Android.
+Les contrats de catalogue/génération, les envois ciblés, le reset du parseur et l’ordre du
+coordinateur sont couverts par les tests locaux. La mailbox destination pure est bornée à
+512 opérations et testée pour l’ordre Send/Select, le latest-request-wins, le reset
+multicanal après saturation et le drain de fermeture. L'acteur du `ViewModel` et
+l'ordonnanceur interne sont pilotés sur JVM avec horloge, stockage, audio et ports injectés.
+
+Le gate V2 réussit 131 tests domaine et 160 tests application, soit 291/291, plus 2/2
+suites natives. Les Lint Debug, Release, Benchmark et Instrumented indiquent
+`No issues found.`, les quatre variantes sont assemblées et la suite directe sur Samsung
+SM-X620 réussit 7/7. Elle reçoit notamment l'éditeur Learn Compose et ses transactions
+conflit/Replace/Save/Cancel. Ces preuves synthétiques et instrumentées ne valident pas la
+découverte, le trafic, le hotplug, l'horloge ou les notes tenues avec des périphériques
+USB MIDI physiques ; ces protocoles restent ouverts.
 
 ## Tests matériels minimaux — non exécutés pendant la porte 2
 

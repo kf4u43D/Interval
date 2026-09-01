@@ -125,6 +125,14 @@
 
 ### Fixed
 
+- Same Pitch calcule désormais depuis l'ancre non shiftée puis compose exactement le
+  Chromatic Shift courant : les cas stable, ajouté et relâché conservent la hauteur
+  attendue ; une Note externe entendue devient aussi la référence du delta suivant.
+- `UndoThenMove` devient le dernier déplacement répétable par Same Interval. Les leases
+  Shift Note/CC survivent au remplacement du mapping jusqu'à leurs releases d'origine.
+- Play Once comptabilise sa dernière émission comme fin du cycle logique avant le retour
+  manuel ; Auto-Transpose/Auto-Translate accumulent donc leur ±1 terminal, tandis que
+  Restart et Reset restaurent les accumulations documentées.
 - Diagnostic Windows : Ninja fourni par CMake 3.22.1 dans le SDK Android est désormais
   accepté même s'il n'est pas inscrit dans le `PATH` global ; le diagnostic Unix applique
   la même recherche de repli.
@@ -209,6 +217,28 @@
   USB MIDI/Learn, TalkBack, vrai multi-touch, loopback/hotplug et soak.
 
 ### Verified
+
+- Gate Stage 4/V2 final du 1er septembre sur le commit
+  `13c2d7c4915e8da65c5e6898daf8ee9a5f253e75` : 131/131 tests domaine sur 11 suites et
+  160/160 tests application sur 19 suites, soit 291/291 sans échec, erreur ni test ignoré ;
+  CTest 2/2.
+- `doctor.ps1` termine avec 0 erreur et un avertissement attendu pour `kotlinc` absent ;
+  `verify-structure.ps1` et `verify.ps1` sont verts, avec quatre ABI contrôlées. Les Lint
+  Debug, Release, Benchmark et Instrumented rendent tous `No issues found.` ; gate
+  principal, variantes et AndroidTest réussissent.
+- Suite directe finale SM-X620/API 36 : 7/7 en 15,603 s, couvrant MIDI Learn
+  conflit→Replace→Save/Cancel, sliders Synthé, pads, Tone Row et dix cycles audio
+  start/stop. Cette réception UI ne vaut pas capture Learn depuis un périphérique USB.
+- Artefacts V2 finaux : Debug 40 596 619 octets
+  (`744f5a08af37861eaecdb8c3b2a7a47b2dda68283929a50d08c3849ee9db5dc4`), Release non
+  signé 9 199 584 (`c91874fb5628f9484673a089287515c27bc3074da74848dc3192ed3bcf971ed8`),
+  Benchmark 9 207 816 (`87b2b48693d19c82bfaf6929695cc645a2a61bf2818780aa434eb603c364ffe2`),
+  Instrumented 40 317 773 (`43adb0eb7a518367c0ce313f62f323217855b55d320609b7fd57c13f82aed029`)
+  et AndroidTest 2 543 071 (`e78d057e92eeb42085643c098adf476147abf96d0f4e15e64afeee6fd47e711f`).
+
+Les entrées suivantes conservent, comme archives datées, les preuves successives des
+portes 1 à 3 et de la clôture MVP antérieure à la V2 ; leurs totaux ne remplacent pas le
+gate final 291/291 ci-dessus.
 
 - Gate Gradle de la porte 1 réussi : 41 tests domaine et 42 tests JVM application, sans
   échec, puis lint et assemblage debug.

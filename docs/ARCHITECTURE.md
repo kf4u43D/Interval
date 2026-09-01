@@ -212,10 +212,12 @@ articulation/strummer, console, statut et synthé/diagnostics. Les pads conserve
 distincts mais dessinent leur contenu via cache afin qu'un tick n'impose pas neuf sous-arbres
 Material complets.
 
-Le dernier gate JVM chiffré du MVP couvre ce découpage, le contrat audio, ses migrations
-et les aperçus transitoires avec 94 tests domaine et 140 tests application, soit 234/234.
-Ces nombres précèdent la V2 ; son reducer d'éditeur et son interception doivent être
-revalidés dans le prochain gate complet.
+Le gate V2 couvre ce découpage, le contrat audio, ses migrations, les aperçus transitoires,
+le reducer d'éditeur MIDI Learn et son interception avec 131 tests domaine et 160 tests
+application, soit 291/291. Les 2/2 suites natives, les Lint Debug, Release, Benchmark et
+Instrumented sans issue, les quatre variantes assemblées et les 7/7 tests directs sur
+Samsung SM-X620 complètent la preuve. Cette réception Android ne remplace pas les
+protocoles avec périphériques USB MIDI réels, qui restent ouverts.
 
 Aucune télémétrie réseau dans le MVP.
 

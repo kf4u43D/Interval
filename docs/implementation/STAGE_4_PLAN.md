@@ -1,5 +1,9 @@
 # Étape 4 — plan et journal d’implémentation V2
 
+**Statut final : complète le 1er septembre 2026.** Le gate décrit ci-dessous vérifie le
+commit `13c2d7c4915e8da65c5e6898daf8ee9a5f253e75`. Les validations USB MIDI, 90 Hz,
+TalkBack, vrai multi-touch, loopback, hotplug audio et soak restent séparées et ouvertes.
+
 ## Résultat utilisateur attendu
 
 Interval Tablet fournit une tranche V2 jouable : les fonctions assignables respectent
@@ -39,34 +43,34 @@ fichier ni provoquer de note parasite pendant l'apprentissage.
 - Pause n'avance pas l'horloge et un déplacement manuel ne redémarre pas le transport.
 - Aucun changement n'est requis dans le callback audio C++.
 
-## Changements prévus par module
+## Changements réalisés par module
 
 ### `domain/`
 
-- Étendre l'état et les actions de l'instrument pour les répétitions, Random et les
+- État et actions de l'instrument étendus pour les répétitions, Random et les
   modificateurs chromatiques tenus.
-- Ajouter un reducer transactionnel d'édition de mapping.
-- Étendre Tone Row aux huit modes, au compteur de cycle, à Pause navigable, à la vélocité
+- Reducer transactionnel d'édition de mapping ajouté.
+- Tone Row étendu aux huit modes, au compteur de cycle, à Pause navigable, à la vélocité
   live et à l'annulation de prise.
-- Adapter le routeur afin que toute action nécessitant une libération reçoive Note Off,
+- Routeur adapté afin que toute action nécessitant une libération reçoive Note Off,
   front CC descendant et purge.
 
 ### `app/`
 
-- Retirer les anciens détournements Random/Chromatic Shift du coordinateur.
-- Intercepter la capture MIDI Learn dans l'acteur avant la politique de preset et le routeur.
-- Ajouter intents, projection étroite et panneau Compose d'édition accessible.
-- Étendre les adaptateurs UI Tone Row aux quatre nouveaux modes.
+- Anciens détournements Random/Chromatic Shift retirés du coordinateur.
+- Capture MIDI Learn interceptée dans l'acteur avant la politique de preset et le routeur.
+- Intents, projection étroite et panneau Compose d'édition accessible ajoutés.
+- Adaptateurs UI Tone Row étendus aux quatre nouveaux modes.
 
 ### `app/src/main/cpp/`
 
-- Aucun changement prévu.
+- Aucun changement requis ni réalisé.
 
 ### Tests et documentation
 
-- Étendre les tests domaine, routeur, coordinateur, ViewModel, projections, sérialisation
-  et accessibilité Compose.
-- Mettre la documentation en accord avec le comportement réellement livré et les limites.
+- Tests domaine, routeur, coordinateur, ViewModel, projections, sérialisation et
+  accessibilité Compose étendus.
+- Documentation alignée sur le comportement livré et ses limites.
 
 ## Risques
 
@@ -94,23 +98,31 @@ fichier ni provoquer de note parasite pendant l'apprentissage.
 - 2026-09-01 : Ratchet différé car le scheduler courant ne possède qu'une release future ;
   l'ajouter sans génération annulable créerait un risque de Note On tardif.
 - 2026-09-01 : Mapping v1 conservé, car les quinze variantes existantes couvrent ce lot.
+- 2026-09-01 : corrections de revue intégrées pour l'ancre sonore externe, la composition
+  Same Pitch/Chromatic Shift, `UndoThenMove` répété par Same Interval, la fin de cycle
+  Play Once et les leases Note/CC conservés après remplacement du mapping.
+- 2026-09-01 : gate V2 complet réussi sur le commit vérifié, puis réception directe
+  SM-X620/API 36 à 7/7 en 15,603 s. Aucun périphérique USB MIDI n'était disponible.
 
 ## Résultats de validation
 
 | Validation | Commande/protocole | Résultat | Preuve ou limite |
 |---|---|---|---|
-| Structure | `scripts/verify-structure.ps1` | À exécuter | |
-| Domaine | `scripts/verify-domain.ps1` | À exécuter | |
-| DSP/JNI hôte | `scripts/verify-native.ps1` | À exécuter | aucun changement natif prévu |
-| Android | `scripts/verify.ps1` | À exécuter | SDK/NDK disponibles |
-| Instrumentation | `connectedInstrumentedAndroidTest` ciblé | Selon appareil | tablette requise |
+| Diagnostic | `scripts/doctor.ps1` | Réussi | 0 erreur, 1 avertissement : `kotlinc` autonome absent, repli Gradle prévu |
+| Structure | `scripts/verify-structure.ps1` | Réussi | warnings historiques de fins de ligne limités aux preuves archivées |
+| Domaine | `:domain:test` / `scripts/verify-domain.ps1` | Réussi | 131/131, 11 suites, 0 échec/erreur/ignoré |
+| DSP/JNI hôte | `scripts/verify-native.ps1` | Réussi | CTest 2/2 |
+| Android/JVM | `:app:testDebugUnitTest` | Réussi | 160/160, 19 suites, 0 échec/erreur/ignoré |
+| Lint et variantes | gate principal et variantes | Réussi | Debug, Release, Benchmark et Instrumented : `No issues found.` ; assemblages et AndroidTest verts |
+| Gate agrégé | `scripts/verify.ps1` | Réussi | quatre ABI contrôlées avec leurs runtimes natifs |
+| Instrumentation directe | SM-X620/API 36 | Réussi | 7/7 en 15,603 s : Learn conflict→Replace→Save/Cancel, Synthé, pads, Tone Row et AUDIO-01 |
 | MIDI USB | `docs/HARDWARE_TEST_PROTOCOL.md` | Bloqué matériel | clavier et synthé/interface requis |
 
 ## Critères de sortie
 
-- [ ] Correctifs de fidélité et huit modes couverts par oracles déterministes.
-- [ ] MIDI Learn/éditeur complet du catalogue actuel, persistant et accessible.
-- [ ] Aucun schéma historique cassé et aucune note/modificateur bloqué.
-- [ ] Gate logiciel complet sans avertissement nouveau important.
-- [ ] Documentation, matrice, `.codex/state.json` et `CHANGELOG.md` à jour.
-- [ ] Limites matérielles et dettes V2 suivantes explicitement marquées.
+- [x] Correctifs de fidélité et huit modes couverts par oracles déterministes.
+- [x] MIDI Learn/éditeur complet du catalogue actuel, persistant et accessible.
+- [x] Aucun schéma historique cassé et aucune note/modificateur bloqué.
+- [x] Gate logiciel complet sans avertissement nouveau important.
+- [x] Documentation, matrice, `.codex/state.json` et `CHANGELOG.md` à jour.
+- [x] Limites matérielles et dettes V2 suivantes explicitement marquées.
