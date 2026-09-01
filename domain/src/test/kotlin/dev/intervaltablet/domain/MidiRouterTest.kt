@@ -167,6 +167,102 @@ class MidiRouterTest {
     }
 
     @Test
+    fun mappedNoteChromaticShiftHasASourceOwnedPressAndReleaseLease() {
+        val shiftRouter = MidiRouter(
+            MidiMapping(
+                mapOf(noteKey to MidiAction.ChromaticShift(1)),
+            ),
+        )
+        val pressed = shiftRouter.route(
+            MidiRouterState(),
+            9,
+            1,
+            MidiMessage.NoteOn(3, 60, 100, 10L),
+            destinationA,
+            6,
+        )
+
+        val hold = (pressed.effects.single() as RouterEffect.Instrument).action
+        assertEquals(
+            InstrumentAction.HoldChromaticShift(
+                TriggerSource.Midi(9, 1, 3, 60),
+                1,
+                10L,
+            ),
+            hold,
+        )
+        assertEquals(1, pressed.state.activeLeaseCount)
+
+        val released = shiftRouter.route(
+            pressed.state,
+            9,
+            1,
+            MidiMessage.NoteOff(3, 60, 12, 20L),
+            destinationB,
+            11,
+        )
+        assertEquals(0, released.state.activeLeaseCount)
+        assertEquals(destinationA, released.effects.single().destination)
+        assertEquals(
+            InstrumentAction.Release(
+                TriggerSource.Midi(9, 1, 3, 60),
+                12,
+                20L,
+            ),
+            (released.effects.single() as RouterEffect.Instrument).action,
+        )
+    }
+
+    @Test
+    fun ccChromaticShiftReleasesOnPurgeAndPanic() {
+        val shiftKey = MidiBindingKey(MidiBindingKey.Kind.CC, 11)
+        val shiftRouter = MidiRouter(
+            MidiMapping(
+                bindings = mapOf(shiftKey to MidiAction.ChromaticShift(-1)),
+                ccThresholds = mapOf(shiftKey to 80),
+            ),
+        )
+        val pressed = shiftRouter.route(
+            MidiRouterState(),
+            4,
+            2,
+            MidiMessage.ControlChange(7, 11, 100, 1L),
+            destinationA,
+            5,
+        )
+        assertTrue(pressed.instrumentActions.single() is InstrumentAction.HoldChromaticShift)
+        assertEquals(1, pressed.state.activeCcGateCount)
+
+        val purged = shiftRouter.purgeSource(pressed.state, 4, 2, 2L)
+        assertEquals(0, purged.state.activeCcGateCount)
+        assertTrue(
+            purged.instrumentActions.any {
+                it == InstrumentAction.Release(
+                    TriggerSource.System("cc:4:2:7:11"),
+                    0,
+                    2L,
+                )
+            },
+        )
+
+        val pressedAgain = shiftRouter.route(
+            MidiRouterState(),
+            4,
+            2,
+            MidiMessage.ControlChange(7, 11, 127, 3L),
+            destinationA,
+            5,
+        )
+        val panic = shiftRouter.panic(pressedAgain.state, 4L, destinationA, 5)
+        assertEquals(0, panic.state.activeCcGateCount)
+        val actions = panic.instrumentActions
+        val releaseIndex = actions.indexOfFirst { it is InstrumentAction.Release }
+        val panicIndex = actions.indexOfFirst { it is InstrumentAction.Panic }
+        assertTrue(releaseIndex >= 0)
+        assertTrue(panicIndex > releaseIndex)
+    }
+
+    @Test
     fun passThruToggleCcUsesRisingEdgesAndCanReturnToActive() {
         val toggleKey = MidiBindingKey(MidiBindingKey.Kind.CC, 88)
         val toggleRouter = MidiRouter(MidiMapping(mapOf(toggleKey to MidiAction.TogglePassThrough)))

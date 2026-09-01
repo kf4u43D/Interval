@@ -38,6 +38,33 @@ Une articulation ne change ni le calcul de hauteur, ni l'historique, ni l'ancre.
 changement ne coupe pas les notes déjà tenues : chaque source garde les instances émises
 au moment de sa pression jusqu'à son `release`.
 
+### Same Interval, Same Pitch et Random Interval
+
+- `Same Interval` répète le dernier déplacement diatonique `-14…+14`. Après un mouvement
+  `+3`, il applique donc de nouveau `+3` depuis la position courante. Avant tout mouvement,
+  sa valeur neutre `0` rejoue la position.
+- `Same Pitch` répète le dernier écart chromatique entre deux leads réellement émis. Dans
+  l'oracle Ré majeur D→E, il mémorise `+2` demi-tons et produit ensuite F♯ depuis E, même
+  si le prochain degré diatonique aurait une autre distance. Un geste muet ne remplace pas
+  cet historique sonore.
+- `Random Interval` choisit immédiatement un déplacement diatonique dans `-14…+14` avec
+  le générateur et la graine de l'état, puis suit exactement le chemin d'une pression de
+  pad. Il ne change jamais le parcours Random de Tone Row. Le mouvement tiré devient le
+  dernier intervalle répétable par `Same Interval`.
+
+Ces trois actions appliquent articulation, voicing, historique et ownership comme une
+pression normale. Une même graine et une même suite d'actions produisent les mêmes tirages.
+
+### Chromatic Shift momentané
+
+- La pression installe silencieusement un décalage `-12…+12` demi-tons possédé par sa
+  source. Elle ne déplace ni curseur, ni historique et n'émet aucune note.
+- Les décalages de plusieurs sources tenues s'additionnent de façon bornée. Ils affectent
+  uniquement les notes et strums démarrés pendant leur maintien ; une note déjà active
+  conserve sa hauteur et sa future release exacte.
+- Le relâchement de la Note, le passage d'un CC sous son seuil, une purge ou Panic retire
+  le décalage de la source concernée. Les autres modificateurs tenus restent actifs.
+
 ### Undo
 
 - Revient à la précédente hauteur **différente**.
@@ -51,7 +78,8 @@ au moment de sa pression jusqu'à son `release`.
 
 - émet un Note Off pour toutes les instances connues sur le canal de sortie ;
 - envoie CC 123 (All Notes Off) et CC 120 (All Sound Off) sur les canaux concernés ;
-- vide les registres de notes actives, sans modifier la gamme, la clé ou le contenu de Tone Row.
+- vide les registres de notes actives et de Chromatic Shift, sans modifier la gamme, la
+  clé ou le contenu de Tone Row.
 
 ## 3. Accords
 
@@ -101,6 +129,8 @@ Le voicing complet reste calculable dans les trois modes pour alimenter le strum
 État initial : `Idle`.
 
 - `Record` depuis `Idle` vide la série et passe à `Recording`.
+- `Record` reçu une seconde fois pendant `Recording` abandonne toute la prise en cours,
+  vide la série créée par cette prise et revient à `Idle`.
 - Chaque mouvement enregistre la hauteur résultante et sa vélocité.
 - Un mouvement provenant d'un pad applique aussi son articulation sonore. En `MUTED`, la
   hauteur est donc enregistrée et devient courante sans Note On.
@@ -125,7 +155,16 @@ L’enregistrement conserve une représentation en degrés relative à la gamme 
 - `Restart` revient au premier élément et le joue immédiatement.
 - `Undo` est interprété comme `Restart` en lecture manuelle, automatique ou en pause.
 - `Play/Pause` depuis `Idle` ou `ManualPlayback` lance Auto Play au début de la série.
-- Les notes d’un contrôleur MIDI mappées aux fonctions d’intervalle utilisent les mêmes règles.
+- Les Notes d’un contrôleur MIDI mappées à Move utilisent les mêmes règles ; Same Interval
+  répète ici le dernier déplacement d'indice de la rangée. Same Pitch, Random Interval et
+  Chromatic Shift gardent leur sémantique instrument et ne sélectionnent aucun parcours
+  Tone Row implicite.
+- En `Paused`, les mêmes déplacements manuels restent actifs sans redémarrer le transport.
+  La nouvelle position devient celle depuis laquelle Continue reprendra.
+- Lorsqu'une Note MIDI mappée provoque une émission manuelle ou en pause, sa vélocité
+  remplace celle de l'élément pour cette émission seulement. Le contenu enregistré et sa
+  vélocité persistée ne changent pas ; le tactile continue d'utiliser la vélocité de la
+  rangée.
 - Les gestes de pads et mappings assimilés à une pression de pad utilisent l'articulation
   courante en lecture manuelle. La lecture automatique reste polyphonique comme avant et
   joue toujours le voicing complet, indépendamment de l'articulation des pads.
@@ -143,16 +182,29 @@ L’enregistrement conserve une représentation en degrés relative à la gamme 
   qu'il existe d'éléments, puis revient à `ManualPlayback`.
 - `Play/Pause`, `Stop`, `Restart`, `Play Once` et `Record` suivent une machine d’état explicite.
 
-### Modes de lecture
+### Huit modes de lecture
 
-- `Prime` : ordre et sens normaux.
-- `Retro` : ordre inversé.
-- `Random` : choix par générateur pseudo-aléatoire à graine injectable ; les tests doivent être reproductibles.
+- `Prime` : mouvements dans leur sens normal.
+- `Retro` : signe de parcours inversé.
+- `Random` : départ au premier élément, puis variation pseudo-aléatoire de chaque
+  mouvement demandé. Un pas positif tire dans `0…2×|pas|`, un pas négatif dans
+  `-2×|pas|…0` et zéro reste zéro. La graine est injectable et reproductible.
 - `Pendulum` : aller-retour sans répéter deux fois les extrémités.
-- `Transpo Up/Down` : décalage chromatique en demi-tons appliqué après la projection
+- `Auto-Transpose Up/Down` : parcours Prime ; après chaque cycle logique de
+  `row.size` émissions, ajoute ou retire un demi-ton à la transposition de sortie.
+- `Auto-Translate Up/Down` : parcours Prime ; après chaque cycle logique de
+  `row.size` émissions, ajoute ou retire un degré à la translation du contour.
+
+Pause/Continue conserve la phase de cycle et l'accumulation automatique. Restart repart
+du premier élément et remet cette accumulation à zéro ; Reset revient aussi au mode
+`Prime` et aux transformations neutres. Changer de mode redémarre le compteur de cycle.
+
+### Transformations indépendantes
+
+- `Transposition` : décalage chromatique fixe en demi-tons appliqué après la projection
   diatonique, sans modifier la série enregistrée.
-- `Translate Up/Down` : décalage en degrés appliqué au contour avant sa projection
-  dans la gamme active, sans modifier la définition enregistrée.
+- `Translation` : décalage fixe en degrés appliqué au contour avant sa projection dans
+  la gamme active, sans modifier la définition enregistrée.
 - `Invert` : inverse le signe des mouvements relatifs autour du point de départ.
 - `Octave` : offset d’octave de sortie, borné par la plage de notes.
 
@@ -226,7 +278,34 @@ Une transition de mode ne coupe pas arbitrairement les notes déjà tenues. Chaq
   une nouvelle entrée enregistrée est persistée immédiatement, tandis que les simples
   Note On/Off, ticks, curseurs live et deadlines ne provoquent pas d’écriture.
 
-## 10. Moniteur audio et patch synthé
+## 10. Éditeur MIDI Learn
+
+L'éditeur est une transaction éphémère autour du mapping courant.
+
+- `Open` capture une baseline immutable et crée un brouillon identique. Ce brouillon ne
+  rejoint ni la session, ni DataStore, ni les presets pendant l'édition.
+- `Arm` choisit d'abord l'action cible et demande Panic afin de partir sans lease tenue.
+  La première Note On ou le premier CC appris est capturé avant politique de rappel et
+  routeur : il n'est ni joué, ni transmis, ni interprété comme une autre commande. Le
+  trafic Note/CC reste consommé tant que le candidat n'est pas accepté ou annulé.
+- Le candidat prend par défaut le canal reçu. Il peut devenir Omni ; un CC reçoit le seuil
+  64, modifiable dans `1…127`.
+- Une collision sur la même clé Note/CC et le même canal exige `Replace`. La coexistence
+  d'un binding exact et d'un binding Omni est autorisée et signalée comme recouvrement ;
+  à l'exécution, l'exact reste prioritaire.
+- Add/Replace, suppression et Reset mapping ne modifient que le brouillon. Save est refusé
+  tant qu'une capture n'est pas résolue ou si le mapping courant ne correspond plus à la
+  baseline ; sinon il remplace le mapping une seule fois et ferme l'éditeur. Cancel ferme
+  et jette tout le brouillon sans persistance.
+- Performance Lock, arrêt d'hôte, perte de source ou récupération après débordement
+  ferment prudemment la transaction et ses états de capture.
+
+Le format persistant de mapping reste en version 1 parce que le catalogue d'actions et
+les clés Note/CC existants suffisent. Le mapping validé devient celui de la session
+courante. Un preset déjà sauvegardé conserve son ancien mapping tant que l'utilisateur ne
+sauvegarde pas de nouveau ce slot.
+
+## 11. Moniteur audio et patch synthé
 
 - `SynthPatch` porte seize valeurs finies et bornées, associées à des identifiants filaires
   stables `0…15` : mix saw, pulse et triangle, pulse width, ADSR, cutoff, résonance,
@@ -250,7 +329,7 @@ Une transition de mode ne coupe pas arbitrairement les notes déjà tenues. Chaq
   patch complet devient autoritaire et est persisté. Une fermeture du panneau pendant un
   geste finalise également ce brouillon.
 
-## 11. Déterminisme
+## 12. Déterminisme
 
 Les tests fournissent explicitement :
 
@@ -260,3 +339,16 @@ Les tests fournissent explicitement :
 - configuration de gamme, clé, plage et canal.
 
 Aucune règle du domaine ne lit directement l’heure système, Android, un périphérique ou un générateur aléatoire global.
+
+## 13. Reports après la V2
+
+- Les éléments de séquence typés Rest, Random Step et Ratchet ne sont pas assimilés à un
+  mouvement entier. Ratchet attend un ordonnanceur de Note On futures annulable par
+  génération, afin qu'un Stop, Panic ou changement de destination ne laisse aucun
+  retrigger tardif.
+- L'émission MIDI Clock/Start/Stop/Continue et Song Position Pointer est différée ; cette
+  spécification ne couvre que la réception du transport MIDI.
+- Les sélections de gamme, clé, accord et preset par mapping, les CC relatifs/continus,
+  profils et import/export restent hors du catalogue V2.
+- La bibliothèque étendue de gammes, les scopes de presets, l'optimisation soutenue à
+  90 Hz et la certification USB MIDI/TalkBack/multi-touch/loopback/soak restent ouvertes.

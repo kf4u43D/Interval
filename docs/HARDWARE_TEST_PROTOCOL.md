@@ -2,8 +2,8 @@
 
 ## Objectif
 
-Valider le MVP sur la tablette cible avec un contrôleur MIDI USB, un synthétiseur MIDI
-externe et la sortie audio Android. Ce protocole produit des preuves reproductibles ;
+Valider le MVP et le lot V2 sur la tablette cible avec un contrôleur MIDI USB, un
+synthétiseur MIDI externe et la sortie audio Android. Ce protocole produit des preuves reproductibles ;
 une impression subjective seule ne suffit pas pour fermer une porte d’acceptation.
 
 ## Matériel minimal
@@ -56,6 +56,38 @@ compteur de note active ne reste non nul après relâchement.
 
 **Acceptation :** une seule action par message, aucune action sur le mauvais canal,
 Note On vélocité 0 traité comme Note Off.
+
+### MIDI-USB-03B — MIDI Learn et fonctions V2
+
+- ouvrir l'éditeur, choisir Same Interval, armer puis jouer une Note ; répéter avec un CC,
+  canal reçu puis Omni et plusieurs seuils ;
+- capturer simultanément MIDI Out et l'état du synthé pour vérifier que le message appris
+  ne joue pas et ne traverse pas ;
+- créer un binding exact sur une clé Omni existante, puis provoquer une collision exacte ;
+  vérifier avertissement de recouvrement et remplacement explicite ;
+- modifier/supprimer/reset le brouillon puis Cancel ; rouvrir et comparer au mapping actif ;
+- recommencer et Save, relancer l'application, puis rappeler un ancien preset avant et
+  après resauvegarde explicite de son slot ;
+- armer puis tester Performance Lock, arrière-plan, débranchement de la source et Panic.
+
+**Acceptation :** capture avant routage/rappel, aucun Note On/CC appris transmis, exact
+prioritaire sur Omni, seuil respecté, aucun remplacement silencieux, Save unique et
+persistant, Cancel sans modification. Le preset antérieur garde son ancien mapping jusqu'à
+sa resauvegarde ; toute fermeture forcée ne laisse ni capture ni lease active.
+
+### MIDI-USB-03C — Same, Random et Shift
+
+- dans une gamme dont les pas chromatiques varient, jouer D→E, puis Same Pitch et vérifier
+  F♯ ; jouer `+3`, puis Same Interval et comparer les déplacements ;
+- exécuter deux fois Random Interval depuis le même état/graine de session ;
+- tenir Chromatic Shift par Note puis par CC, jouer plusieurs sources, empiler deux shifts
+  et relâcher chaque modificateur séparément ;
+- répéter avec changement de mode, purge de port et Panic.
+
+**Acceptation :** Same Interval répète le pas diatonique, Same Pitch le delta réellement
+entendu, Random joue immédiatement sans changer le mode Tone Row et la séquence est
+reproductible à graine identique. Shift ne joue rien seul, ne modifie pas les notes déjà
+tenues, et chaque source/release produit des Note Off exacts sans modificateur résiduel.
 
 ### MIDI-USB-03A — articulation des pads et strummer
 
@@ -140,6 +172,22 @@ Tone Row `Idle`, transport `Stopped` et aucun registre de note active.
 **Acceptation :** même graine = même séquence, sauvegarde/rechargement conserve l’état
 accepté, aucune répétition interdite pendant l’enregistrement.
 
+### TONEROW-02 — fidélité V2
+
+- démarrer Record, entrer plusieurs notes puis appuyer de nouveau sur Record ;
+- enregistrer une rangée avec des vélocités distinctes, démarrer Auto, Pause, naviguer par
+  pad puis par Note MIDI à vélocité extrême, et envoyer Continue ;
+- parcourir Prime, Retro, Random, Pendulum, Auto-Transpose haut/bas et Auto-Translate
+  haut/bas sur une rangée connue ; pour Random tester des pas positifs, négatifs et zéro ;
+- laisser chaque mode Auto franchir au moins deux cycles, avec Pause/Continue puis
+  Restart/Reset.
+
+**Acceptation :** second Record revient à `Idle` sans conserver la prise annulée. Pause
+reste affiché pendant la navigation ; Continue repart de la nouvelle position. La
+vélocité MIDI ne change que l'émission. Random démarre au premier élément, conserve le
+signe et reste reproductible. Les transformations Auto évoluent une fois par cycle,
+survivent à Pause/Continue et reviennent à leur accumulation neutre sur Restart/Reset.
+
 ## Audio interne
 
 ### AUDIO-01 — démarrage/reprise
@@ -175,6 +223,29 @@ elle ne remplace pas le loopback lorsqu'une mesure chiffrée est revendiquée.
 
 **Acceptation :** zéro crash/ANR, zéro note bloquée, aucune croissance continue de mémoire,
 aucun événement perdu ; xruns nuls ou entièrement expliqués par une action de périphérique.
+
+## Rendu 90 Hz
+
+### UI-90HZ-01 — performance soutenue V2
+
+- installer la variante benchmark identifiée, compiler AOT et vérifier que la dalle est
+  réellement à 90 Hz ;
+- exécuter des passes contrebalancées audio OFF/ON avec Auto Tone Row, puis avec le panneau
+  MIDI Learn ouvert et un brouillon représentatif ;
+- conserver warm-up, batterie, thermique, dump `gfxinfo` brut et fenêtre exacte.
+
+**Acceptation :** budget de frame soutenu de 11,11 ms démontré sur une fenêtre complète,
+sans présenter `gfxinfo` comme une mesure de latence MIDI ou audio. Ce protocole est ouvert
+tant qu'aucune nouvelle campagne V2 n'est archivée.
+
+## Reports non testables dans la V2
+
+Ne pas ajouter de résultat Pass pour Rest, Random Step, Ratchet, émission MIDI
+Clock/Start/Stop/Continue, Song Position Pointer, mappings de gamme/clé/accord/preset,
+CC relatifs/continus, profils/import-export ou catalogues étendus de gammes/presets : ces
+fonctions sont différées. USB MIDI/Learn, TalkBack, vrai multi-touch, loopback, hotplug
+audio et soak nécessitent les scénarios matériels ci-dessus et restent ouverts jusqu'à
+preuve archivée.
 
 ## Rapport
 

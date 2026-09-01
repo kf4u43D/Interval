@@ -116,6 +116,10 @@ internal fun ToneRowContentInputs.toToneRowContentUiState(): ToneRowContentUiSta
             ToneRowPlayMode.RETRO -> ToneRowUiPlaybackMode.RETRO
             ToneRowPlayMode.RANDOM -> ToneRowUiPlaybackMode.RANDOM
             ToneRowPlayMode.PENDULUM -> ToneRowUiPlaybackMode.PENDULUM
+            ToneRowPlayMode.AUTO_TRANSPOSE_UP -> ToneRowUiPlaybackMode.AUTO_TRANSPOSE_UP
+            ToneRowPlayMode.AUTO_TRANSPOSE_DOWN -> ToneRowUiPlaybackMode.AUTO_TRANSPOSE_DOWN
+            ToneRowPlayMode.AUTO_TRANSLATE_UP -> ToneRowUiPlaybackMode.AUTO_TRANSLATE_UP
+            ToneRowPlayMode.AUTO_TRANSLATE_DOWN -> ToneRowUiPlaybackMode.AUTO_TRANSLATE_DOWN
         },
         inverted = inverted,
         transpositionSemitones = transpositionSemitones,

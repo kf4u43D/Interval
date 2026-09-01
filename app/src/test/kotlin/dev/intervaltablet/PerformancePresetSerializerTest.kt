@@ -76,6 +76,25 @@ class PerformancePresetSerializerTest {
     }
 
     @Test
+    fun automaticTransformationModesPersistByNameWithoutChangingTheSchema() {
+        val modes = listOf(
+            ToneRowPlaybackSnapshotMode.AUTO_TRANSPOSE_UP,
+            ToneRowPlaybackSnapshotMode.AUTO_TRANSPOSE_DOWN,
+            ToneRowPlaybackSnapshotMode.AUTO_TRANSLATE_UP,
+            ToneRowPlaybackSnapshotMode.AUTO_TRANSLATE_DOWN,
+        )
+
+        modes.forEach { mode ->
+            val preset = PerformancePresetSnapshot(toneRow = ToneRowSnapshot(playMode = mode))
+            val encoded = PerformancePresetSerializer.encode(preset)
+
+            assertTrue("mode=$mode", encoded.contains("\"schemaVersion\":3"))
+            assertTrue("mode=$mode", encoded.contains("\"playMode\":\"${mode.name}\""))
+            assertEquals("mode=$mode", preset, PerformancePresetSerializer.decode(encoded))
+        }
+    }
+
+    @Test
     fun bankOperationsAndRoundTripCoverBoundarySlots() {
         val first = PerformancePresetSnapshot(name = "First")
         val last = PerformancePresetSnapshot(name = "Last")

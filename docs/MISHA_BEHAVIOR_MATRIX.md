@@ -8,6 +8,8 @@ Référence : guide utilisateur Misha v1.1.6, fonctions publiques uniquement. Ce
 - **Validé logiciel; matériel requis** : comportement couvert hors appareil, mais écoute,
   périphérique ou protocole physique encore nécessaire.
 - **Implémenté, matériel requis** : chemin logiciel présent, mais réception tablette/USB encore ouverte.
+- **Implémenté, gate V2 requis** : comportement du lot V2 présent, mais gate complet et
+  résultat chiffré pas encore consignés.
 - **Non attribuable sur cette campagne** : les distributions mesurées se recouvrent et
   ne permettent pas d'isoler un effet causal.
 - **Socle seulement** : structure existante, insuffisante pour accepter l’étape.
@@ -19,6 +21,9 @@ Référence : guide utilisateur Misha v1.1.6, fonctions publiques uniquement. Ce
 | Jeu | `0` rejoue sans historique distinct | 1 | Validé logiciel | `zeroRetriggersWithoutGrowingHistory` et cas d’ancre externe |
 | Jeu | Undo revient au dernier mouvement distinct | 1 | Validé logiciel | historique non tronqué, répétitions et zéro couverts par `IntervalReducerTest` |
 | Jeu | Home choisit la fondamentale du registre central | 1 | Validé logiciel | toutes les gammes/racines et plages testées dans `PitchGridTest` |
+| Jeu | Same Interval distinct de Same Pitch | 4 | Implémenté, gate V2 requis | `IntervalReducerTest` porte les oracles du pas diatonique répété et du delta chromatique entendu ; revalidation combinée non encore consignée |
+| Jeu | Random Interval immédiat et déterministe | 4 | Implémenté, gate V2 requis | action instrument `-14…+14` distincte du mode Random Tone Row, graine d'état explicite ; gate V2 requis |
+| Jeu | Chromatic Shift momentané par source | 4 | Implémenté, gate V2 requis | modificateur silencieux additionnable, retiré par Release/purge/Panic ; scénarios Note/CC et ownership à revalider dans le gate complet |
 | Jeu | changement de clé/gamme 12-TET | 1 | Validé logiciel | oracle exhaustif de grille et reconfiguration avec libération des voix |
 | Range | wrap/clamp configurable | 1 | Validé logiciel | limites haut/bas et indicateurs `NONE`/`CLAMPED`/`WRAPPED` testés |
 | Chords | neuf voicings et Off, trois notes maximum | 1 | Validé logiciel | les dix définitions, vélocités, doublures, ordre et omissions hors plage sont testés |
@@ -27,7 +32,8 @@ Référence : guide utilisateur Misha v1.1.6, fonctions publiques uniquement. Ce
 | Polyphonie | sources simultanées indépendantes | 1 | Validé logiciel; tablette requise | `activeBySource` et registre de pointeurs testés; geste multi-touch physique non reçu |
 | MIDI | parsing Note/CC/Program/Pitch Bend/Aftertouch et temps réel | 1 | Validé logiciel | fragmentation octet par octet, running status, temps réel imbriqué et encodage couverts dans `MidiMessageParserTest` |
 | MIDI | SysEx borné et brut uniquement en PassThru | 1 | Validé logiciel | fragmentation, dépassement 64 KiB, récupération et route PassThru testés |
-| MIDI | mapping notes/CC et commandes Tone Row | 1–2 | Validé logiciel | priorité canal exact/Omni, sérialisation versionnée, reset et bornes testés ; Random, ChromaticShift, Play, Stop et Record rejoignent le reducer Tone Row sur leur front actif |
+| MIDI | mapping notes/CC et commandes de performance | 1–4 | Implémenté, gate V2 requis | priorité canal exact/Omni, sérialisation versionnée et seuils historiques ; Random joue maintenant l'intervalle et Chromatic Shift suit sa gate, tandis que Play/Stop/Record restent Tone Row |
+| MIDI | éditeur MIDI Learn transactionnel | 4 | Implémenté, gate V2 requis ; USB requis | reducer pur baseline/brouillon/candidat/conflit, capture avant rappel/routage, Save atomique et Cancel sans persistance ; réception contrôleur/tablette ouverte |
 | MIDI | CC mappé actif au seuil, 64 par défaut | 1 | Validé logiciel | seuils 63/64 et surcharges par binding couverts |
 | MIDI | Off/Active/Active Last Note/PassThru | 1 | Validé logiciel | routes mappées, transmises ou supprimées et ancre externe couvertes ; l’exception normative Panic/Toggle en PassThru est testée |
 | MIDI | messages non mappés transmis en Active | 1 | Validé logiciel | octets et ordre global des effets vérifiés par routeur/coordinateur |
@@ -39,14 +45,18 @@ Référence : guide utilisateur Misha v1.1.6, fonctions publiques uniquement. Ce
 | UX | grandes cibles, multi-touch, clavier et sémantiques | 1 | Reçu partiellement sur tablette | pression simple reçue, cibles ≥72 dp et registre multi-pointeur testés ; vrai multi-touch, TalkBack et contraste restent à recevoir |
 | UX | Console MIDI non modale et Performance Lock | 1 | Implémenté, tablette requise | ports, canaux, mode, mapping, plage, gamme, clé et accord câblés; validation ergonomique ouverte |
 | Tone Row | record, fin précoce et classes uniques | 2 | Validé logiciel | `ToneRowReducerTest` couvre effacement de l'ancienne prise, fin vide/non vide, recherche directionnelle et vélocités |
+| Tone Row | second Record annule la prise | 4 | Implémenté, gate V2 requis | action `CancelRecording` revient à `Idle` et abandonne les entrées de la prise ; gate combiné à consigner |
 | Tone Row | fin lorsque la gamme est épuisée | 2 | Validé logiciel | fixtures complètes 5/7/12 et plage étroite ; la capacité suit les classes réellement accessibles, avec bascule automatique en lecture manuelle |
 | Tone Row | boutons deviennent déplacements d’indice | 2 | Validé logiciel | wrap d'indices, `0`, Restart et Undo réinterprété couverts ; pads tactiles et mappings utilisent le même coordinateur |
+| Tone Row | navigation en Pause et vélocité MIDI live | 4 | Implémenté, gate V2 requis | ManualMove accepte `Paused`; l'override de vélocité est réservé à la source MIDI et n'altère pas la rangée persistée |
 | Auto | séquence initiale `{+1}` et édition live | 2 | Validé logiciel | curseur indépendant, ajout/suppression/sélection, borne 64 et dernier pas rétabli à `{+1}` |
-| Auto | Prime/Retro/Random/Pendulum | 2 | Validé logiciel | ordres opposés, graine Random explicite et Pendulum sans double extrémité couverts |
+| Auto | huit parcours Tone Row | 2–4 | Implémenté, gate V2 requis | Prime/Retro/Random/Pendulum plus Auto-Transpose haut/bas et Auto-Translate haut/bas ; cycle logique et reprise Pause/Continue à revalider ensemble |
+| Auto | Random signé | 4 | Implémenté, gate V2 requis | départ au premier élément ; chaque pas conserve son signe et tire une magnitude `0…2×|pas|` avec graine explicite |
 | Auto | inversion, translate, transpose, octave | 2 | Validé logiciel | ordre inversion→translation diatonique→projection→transposition chromatique→octave→clamp et reset testé |
-| Auto | Play Once sur une traversée | 2 | Validé logiciel | une taille de rangée exactement, émission initiale comprise, pour les quatre modes puis retour manuel |
+| Auto | Play Once sur une traversée | 2 | Validé logiciel | une taille de rangée exactement, émission initiale comprise, pour les quatre modes historiques puis retour manuel ; extension aux quatre modes V2 dans le gate à venir |
 | Clock | horloge interne et MIDI Clock 24 PPQ | 2 | Validé logiciel; matériel requis | `TransportReducerTest` couvre sources exclusives, divisions, tempo, timestamps et ticks ; jitter USB/Android non mesuré |
 | Clock | Start/Stop/Continue/Pause | 2 | Validé logiciel; matériel requis | Start remet au début ; MIDI Stop libère et pause en conservant la position ; Continue attend le prochain tick ; réception USB ouverte |
+| Clock | Clock/transport MIDI sortants et Song Position Pointer | après V2 | Différé | seule la réception 24 PPQ/transport est couverte ; aucune émission ou SPP n'est revendiquée |
 | Presets | persistance versionnée de session/Tone Row | 2–3 | Validé logiciel | Settings v4 porte le patch synthé global ; presets v3 et banque v2 restent musicaux ; migrations v0…v3, limites/corruption et restauration sûre `Idle`/`Stopped` couvertes |
 | Presets | Program Change et Song Select | 2 | Validé logiciel; matériel requis | slots `0…127`, PC filtré par canal, Song global, slot absent non consommé et aucun rappel en PassThru ; le patch synthé global est préservé ; contrôleur réel non reçu |
 | UX | timeline, curseurs, transport et transformations Tone Row | 2–3 | Reçu partiellement sur tablette | états Tone Row, presets et timeline observés sur SM-X620 ; instrumentation courante 6/6 pour scène/timeline, pads, articulations, cordes et panneau synthé ; vrai multi-touch et TalkBack restent ouverts |
@@ -60,6 +70,8 @@ Référence : guide utilisateur Misha v1.1.6, fonctions publiques uniquement. Ce
 | Audio | gain staging et limiteur anti-saturation | 3 | Validé logiciel; écoute/loopback requis | mix d'oscillateurs normalisé, polyphonie nominale mesurée sous le knee et limiteur identitaire sous `0.75`, continu/monotone/borné au-dessus ; disparition subjective de la saturation non encore qualifiée |
 | Audio | callback temps réel | 3 | Validé logiciel; reçu nominalement sur tablette | drain SPSC borné, Panic d'urgence, générations, ownership partagé et aucune allocation/verrou/I/O/log/JNI ; les 16 IDs + Panic sont drainés sur 10 cycles réels, queue max 17 et zéro drop/xrun dans la revalidation |
 | Robustesse générale | lifecycle prolongé, reprise audio et soak | 3 | MVP logiciel terminé; certification partielle | gate final 234/234 JVM, 2/2 natifs, quatre Lint, tous les assemblages et 6/6 instrumentés ; AUDIO-01 nominal passe ; hotplug physique et protocole 60 min non exécutés |
+| Séquence | Rest, Random Step et Ratchet typés | après V2 | Différé | aucun encodage par valeur sentinelle ; Ratchet attend un scheduler de retrigger annulable par génération |
+| Mapping | gamme/clé/accord/preset, CC relatifs/continus, profils/import-export | après V2 | Différé | le schéma V2 conserve le catalogue d'actions existant et Mapping v1 |
 
 ## Écarts assumés du MVP
 
@@ -68,3 +80,8 @@ Référence : guide utilisateur Misha v1.1.6, fonctions publiques uniquement. Ce
 - Les 200 slots de gammes et les banques du matériel ne sont pas reproduits ; bibliothèque 12-TET réduite et presets utilisateur.
 - L’UI est originale et adaptée à la tablette.
 - Les entrées physiques CV/gate, clavier USB d’ordinateur et fonctions de calibration matérielle ne sont pas reproduites.
+- Rest, Random Step, Ratchet, Clock/transport MIDI sortants et SPP sont reportés après la V2.
+- L'extension des actions mappées, des gammes et des scopes de presets est reportée ; les
+  presets déjà sauvegardés ne reçoivent un nouveau mapping qu'après resauvegarde du slot.
+- Le budget soutenu de 11,11 ms à 90 Hz, USB MIDI/Learn, TalkBack, vrai multi-touch,
+  loopback et soak restent des validations de performance ou matérielles ouvertes.

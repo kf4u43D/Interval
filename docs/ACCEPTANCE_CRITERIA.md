@@ -130,7 +130,7 @@ matériel ci-dessus.
 - [x] Les variantes `benchmark` minifiée/profileable et `instrumented` non minifiée sont
   séparées du package utilisateur et l'une de l'autre.
 
-### Gate logiciel courant acquis
+### Dernier gate logiciel MVP acquis — archive antérieure à la V2
 
 - [x] Le gate final du 1er septembre réussit 234/234 tests JVM (94 domaine et 140
   application), 2/2 tests natifs, les quatre analyses Lint et tous les assemblages ;
@@ -158,3 +158,58 @@ anti-saturation, la latence loopback, le soak de 60 minutes et le hotplug audio 
 recevoir ; les essais USB MIDI des portes 1 et 2 restent eux aussi ouverts. Ces protocoles
 exigent du matériel absent et restent décochés : le MVP logiciel est terminé, tandis que
 sa certification matérielle globale demeure partielle.
+
+## Porte 4 — V2 performance et MIDI Learn
+
+Les cases restent volontairement ouvertes jusqu'au gate complet du lot. La présence du
+code ou d'un test ciblé ne remplace pas la preuve combinée et aucun nouveau total n'est
+déduit du gate MVP archivé ci-dessus.
+
+### Critères logiciels à revalider
+
+- [ ] `Same Interval` répète le dernier déplacement diatonique et `Same Pitch` le dernier
+  écart chromatique réellement émis, avec les oracles `+3→Same` et D→E→F♯.
+- [ ] Random Interval joue immédiatement un mouvement déterministe `-14…+14` sans changer
+  le mode Tone Row ; même graine et mêmes actions donnent la même sortie.
+- [ ] Chromatic Shift est silencieux et momentané, s'additionne par source et disparaît
+  correctement sur Note Off, passage CC sous seuil, purge et Panic, sans Note Off perdu.
+- [ ] Un second Record pendant l'enregistrement abandonne la prise et revient à `Idle`.
+- [ ] La navigation manuelle reste possible en `Paused`, Continue repart de cette position
+  et la vélocité d'une Note MIDI n'affecte que l'émission courante.
+- [ ] Tone Row expose Prime, Retro, Random, Pendulum, Auto-Transpose haut/bas et
+  Auto-Translate haut/bas ; Random conserve le signe dans `0…2×|pas|` et démarre au
+  premier élément.
+- [ ] Les modes automatiques accumulent un demi-ton/degré par cycle logique ; Pause et
+  Continue conservent la phase, tandis que Restart/Reset restaurent l'accumulation neutre.
+- [ ] Le reducer MIDI Learn pur couvre baseline, brouillon, armement, candidat, canal
+  reçu/Omni, seuil CC `1…127`, collision exacte, recouvrement Omni, suppression, reset,
+  Save, Cancel et baseline obsolète.
+- [ ] Une capture Note On/CC est consommée avant politique de preset et routage : elle ne
+  joue pas, ne traverse pas et ne rappelle aucun preset.
+- [ ] Armer provoque Panic ; Save installe/persiste une seule fois le mapping complet et
+  Cancel n'écrit rien. Lock, lifecycle, perte de source et overflow ferment sans conserver
+  de capture transitoire.
+- [ ] Le panneau Compose dédié expose état d'attente, candidat, conflit/recouvrement,
+  actions Add/Replace/Delete/Reset/Save/Cancel et sémantiques accessibles.
+- [ ] Mapping v1 reste lisible et les presets existants conservent leur mapping jusqu'à
+  une nouvelle sauvegarde explicite du slot.
+- [ ] Toutes les suites des portes 1 à 3, Lint et les assemblages concernés repassent sans
+  régression ; les résultats exacts sont consignés dans `docs/VERIFICATION_REPORT.md`.
+
+### Réception et performance encore ouvertes
+
+- [ ] Exécuter MIDI Learn avec un contrôleur USB réel, canal exact puis Omni, Note et CC,
+  et vérifier par moniteur externe que le message capturé ne sort jamais.
+- [ ] Recevoir TalkBack, vrai multi-touch et les fermetures lifecycle/Performance Lock sur
+  la tablette cible.
+- [ ] Atteindre puis mesurer un rendu soutenu dans le budget de 11,11 ms à 90 Hz.
+- [ ] Terminer les protocoles USB MIDI, loopback/hotplug audio et soak de 60 minutes déjà
+  ouverts dans les portes précédentes.
+
+### Reports explicites
+
+Rest, Random Step et Ratchet, l'émission MIDI Clock/Start/Stop/Continue et Song Position
+Pointer, les actions mappées de gamme/clé/accord/preset, les CC relatifs/continus,
+profils/import-export et les bibliothèques/scopes étendus de gammes/presets ne sont pas
+des critères de la V2. Ratchet attend un scheduler de retrigger annulable par génération.
+CV, réseau, Scala, microtonalité, MPE et MIDI 2.0 restent hors périmètre.

@@ -132,6 +132,7 @@ internal data class PerformanceConsoleUiState(
     val outputChannel: Int,
     val passThroughMode: PassThroughMode,
     val mappingCustomized: Boolean,
+    val mappingCount: Int,
     val performanceLock: Boolean,
 )
 
@@ -172,6 +173,7 @@ internal class PerformanceUiProjections internal constructor(
     val lock: State<PerformanceLockUiState>,
     val synth: State<PerformanceSynthUiState>,
     val console: State<PerformanceConsoleUiState>,
+    val midiMappingEditor: State<MidiMappingEditorUiState>,
 )
 
 @Composable
@@ -261,6 +263,9 @@ internal fun rememberPerformanceUiProjections(
             },
             console = derivedStateOf(structuralEqualityPolicy()) {
                 appState.value.toPerformanceConsoleUiState()
+            },
+            midiMappingEditor = derivedStateOf(structuralEqualityPolicy()) {
+                appState.value.toMidiMappingEditorUiState()
             },
         )
     }
@@ -396,6 +401,7 @@ internal fun AppUiState.toPerformanceConsoleUiState(): PerformanceConsoleUiState
         outputChannel = outputChannel,
         passThroughMode = passThroughMode,
         mappingCustomized = mappingCustomized,
+        mappingCount = performance.mapping.bindings.size,
         performanceLock = performanceLock,
     )
 }

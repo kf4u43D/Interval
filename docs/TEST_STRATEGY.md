@@ -16,7 +16,13 @@ Rapides, déterministes, sans Android :
 - symétrie des instances actives ;
 - routage Off/Active/Active Last Note/PassThru ;
 - mapping note/CC et seuil 64 ;
+- Same Interval/Same Pitch, Random Interval à graine explicite et Chromatic Shift
+  multi-source libéré par Note, CC, purge et Panic ;
+- reducer MIDI Learn : baseline/brouillon, capture Note/CC, exact/Omni, seuil, collision,
+  recouvrement, add/replace/delete/reset/save/cancel et baseline devenue obsolète ;
 - Tone Row, unicité, fin automatique et transformations ;
+- Record annulé par un second appui, navigation en Pause, vélocité MIDI transitoire,
+  huit modes, Random signé et cycles Auto-Transpose/Auto-Translate ;
 - transport et Clock 24 PPQ ;
 - sérialisation/migrations via fixtures dans l’app.
 
@@ -39,6 +45,8 @@ Rapides, déterministes, sans Android :
 ### Tests Android locaux
 
 - coordinateur pur et contrat de repository MIDI avec faux ports ;
+- interception Learn avant rappel/routage, message capturé consommé, commit unique,
+  Cancel sans stockage et fermeture sûre au lifecycle/lock/perte de source ;
 - parser MIDI fragmenté et messages temps réel imbriqués ;
 - sérialisation versionnée du mapping, de la session et de la banque de presets,
   migrations, schémas futurs et entrées invalides ;
@@ -59,6 +67,8 @@ Rapides, déterministes, sans Android :
   sans état arrêté observé, avec Panic/stop si le rejeu est refusé ;
 - projections et contrôles du panneau Synthé, brouillon local, aperçu audio confluent par
   frame, deltas filaires sans persistance et commit complet en fin de geste.
+- projection/panneau MIDI Learn : attente, candidat, canal exact/Omni, seuil, conflit,
+  recouvrement, brouillon sale et commandes Save/Cancel.
 
 ### Tests instrumentés/appareil
 
@@ -75,13 +85,15 @@ Rapides, déterministes, sans Android :
   libellé/valeur ;
 - AUDIO-01 : dix cycles start/stop, envoi des 16 paramètres et d'un Panic silencieux,
   vidage borné de la file et collecte des diagnostics négociés.
+- panneau MIDI Learn adaptatif : cibles accessibles, capture depuis un port réel, aucune
+  note/transmission/rappel du message appris et fermeture propre sous Performance Lock.
 
 Ces tests instrumentés sont requis pour la réception matérielle. Ils ne sont pas remplacés par les tests JVM des mêmes invariants.
 
 ## État de preuve — tranche logicielle des portes 2 et 3
 
 - `ToneRowReducerTest` couvre les prises complètes 5/7/12, la fin précoce, la recherche
-  de classe libre, la lecture manuelle, les quatre parcours, les transformations, la
+  de classe libre, la lecture manuelle, les parcours historiques, les transformations, la
   séquence éditable et Play Once.
 - `TransportReducerTest` couvre timing interne, 24 PPQ, divisions, Start/Continue/Stop,
   Pause, changement de source, timestamps et changement de tempo en vol.
@@ -114,6 +126,19 @@ Le rapport `docs/VERIFICATION_REPORT.md` reste la source du résultat chiffré d
 gate complet. Ces tests JVM exercent directement l’acteur et son ordonnanceur coroutine,
 mais ne remplacent pas une instrumentation de `HandlerThread`, `StateFlow` et lifecycle
 sur Android réel.
+
+## État de preuve du lot V2
+
+Le gate chiffré ci-dessous est l'archive du MVP. La V2 ajoute des oracles dans
+`IntervalReducerTest`, `ToneRowReducerTest`, `MidiMappingEditorTest`,
+`PerformanceCoordinatorTest`, `IntervalTabletViewModelTest` et les tests de présentation.
+Un document ne les déclare réussis qu'après exécution du gate complet et consignation du
+résultat dans `docs/VERIFICATION_REPORT.md`.
+
+La revalidation V2 doit notamment prouver D→E→Same Pitch→F♯, `+3→Same`, les tirages
+reproductibles, les shifts Note/CC empilés, Record→Record, Pause→Move→Continue, la
+vélocité live non persistée, les huit modes et l'atomicité Save/Cancel. Elle doit rejouer
+toutes les suites des portes 1 à 3.
 
 Le gate revalidé le 31 août réussit 234/234 tests JVM, soit 94 domaine et 140 application,
 2/2 tests natifs et 6/6 tests instrumentés sur Samsung SM-X620/API 36. AUDIO-01 y réalise
@@ -149,6 +174,15 @@ Le protocole MIDI-USB-04 est aligné sur la règle normative : un changement de 
 - Une Tone Row enregistrée ne contient pas deux fois la même classe de hauteur.
 - Pendulum ne répète pas les extrémités.
 - Une graine identique produit la même séquence Random.
+- Random Tone Row part du premier élément et ne renverse jamais le signe du pas demandé.
+- Same Interval répète le dernier pas diatonique ; Same Pitch répète le dernier delta de
+  lead réellement émis.
+- Chaque Chromatic Shift est retiré par le release de sa propre source ; Panic et purge
+  vident tous les modificateurs sans réinterpréter les notes déjà actives.
+- Un déplacement Tone Row en Pause conserve le transport en Pause, et une vélocité MIDI
+  de lecture manuelle ne modifie aucune entrée persistable.
+- Save MIDI Learn ne peut committer ni capture indécise ni baseline obsolète ; Cancel ne
+  modifie jamais le mapping autoritaire.
 - Play Once produit exactement la taille de la rangée, émission initiale comprise.
 - MIDI Stop libère la voix, conserve les curseurs et met Tone Row en pause ; Continue ne
   rejoue rien avant le tick qualifiant suivant.
@@ -174,6 +208,11 @@ Suivre `docs/HARDWARE_TEST_PROTOCOL.md`, puis conserver sous `docs/implementatio
 - logs synthétiques sans données sensibles ;
 - durée du soak test, xruns, crash et anomalies ;
 - vidéos/captures seulement si elles ne contiennent pas de ressources propriétaires.
+
+Les validations de rendu soutenu à 90 Hz, USB MIDI/Learn, vrai multi-touch, TalkBack,
+latence loopback et soak audio restent matérielles. Rest, Random Step, Ratchet,
+l'émission Clock/transport/SPP, les mappings étendus et les gammes/presets étendus ne font
+pas partie des oracles V2 et ne doivent pas être marqués comme implicitement couverts.
 
 ## Politique de régression
 

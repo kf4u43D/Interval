@@ -1,5 +1,6 @@
 package dev.intervaltablet
 
+import dev.intervaltablet.data.ToneRowPlaybackSnapshotMode
 import dev.intervaltablet.data.toPersistenceSnapshot
 import dev.intervaltablet.data.toStoppedDomainState
 import dev.intervaltablet.domain.ClockSource
@@ -36,6 +37,8 @@ class PerformancePresetAdaptersTest {
             referenceScaleId = "dorian",
             playOnce = true,
             notesRemainingInPass = 1,
+            notesPlayedInCycle = 1,
+            lastManualSteps = -4,
         )
 
         val restored = live.toPersistenceSnapshot().toStoppedDomainState()
@@ -49,6 +52,8 @@ class PerformancePresetAdaptersTest {
         assertEquals(0, restored.rowIndex)
         assertEquals(0, restored.sequenceIndex)
         assertFalse(restored.playOnce)
+        assertEquals(0, restored.notesPlayedInCycle)
+        assertEquals(0, restored.lastManualSteps)
     }
 
     @Test
@@ -77,5 +82,22 @@ class PerformancePresetAdaptersTest {
         assertEquals(0L, restored.stepCounter)
         assertNull(restored.nextInternalTickNanos)
         assertNull(restored.lastTickTimestampNanos)
+    }
+
+    @Test
+    fun automaticTransformationModesRoundTripThroughTheirDistinctSnapshotNames() {
+        val fixtures = mapOf(
+            ToneRowPlayMode.AUTO_TRANSPOSE_UP to ToneRowPlaybackSnapshotMode.AUTO_TRANSPOSE_UP,
+            ToneRowPlayMode.AUTO_TRANSPOSE_DOWN to ToneRowPlaybackSnapshotMode.AUTO_TRANSPOSE_DOWN,
+            ToneRowPlayMode.AUTO_TRANSLATE_UP to ToneRowPlaybackSnapshotMode.AUTO_TRANSLATE_UP,
+            ToneRowPlayMode.AUTO_TRANSLATE_DOWN to ToneRowPlaybackSnapshotMode.AUTO_TRANSLATE_DOWN,
+        )
+
+        fixtures.forEach { (domainMode, snapshotMode) ->
+            val snapshot = ToneRowState(playMode = domainMode).toPersistenceSnapshot()
+
+            assertEquals(domainMode.name, snapshotMode, snapshot.playMode)
+            assertEquals(domainMode.name, domainMode, snapshot.toStoppedDomainState().playMode)
+        }
     }
 }

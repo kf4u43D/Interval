@@ -381,7 +381,7 @@ class MidiRouter(val mapping: MidiMapping = DefaultMidiMap.mapping) {
                 val source = TriggerSource.Midi(deviceId, portNumber, message.channel, message.note)
                 return RouterTransition(
                     state = state,
-                    effects = if (mappedAction.holdsGeneratedNotes()) {
+                    effects = if (mappedAction.requiresRelease()) {
                         listOf(
                             RouterEffect.Instrument(
                                 currentDestination,
@@ -442,7 +442,7 @@ class MidiRouter(val mapping: MidiMapping = DefaultMidiMap.mapping) {
             }
             return RouterTransition(
                 state = state.copy(ccGates = state.ccGates - key),
-                effects = if (existingGate.action.holdsGeneratedNotes()) {
+                effects = if (existingGate.action.requiresRelease()) {
                     listOf(
                         RouterEffect.Instrument(
                             existingGate.destination,
@@ -500,8 +500,8 @@ class MidiRouter(val mapping: MidiMapping = DefaultMidiMap.mapping) {
         }
 
         val actions = action.toInstrumentActions(source, DEFAULT_CC_VELOCITY, message.timestampNanos)
-        // Every CC binding is edge-triggered. Held musical actions additionally emit a
-        // Release when this gate crosses below its threshold; one-shot controls only clear it.
+        // Every CC binding is edge-triggered. Held sounding actions and silent momentary
+        // modifiers additionally emit Release; one-shot controls only clear the gate.
         val gate = CcGateLease(
             source = source,
             action = action,
@@ -664,7 +664,7 @@ class MidiRouter(val mapping: MidiMapping = DefaultMidiMap.mapping) {
             .forEach { (key, gate) ->
                 if (!ccMatches(key, gate)) {
                     nextCcGates[key] = gate
-                } else if (gate.action.holdsGeneratedNotes()) {
+                } else if (gate.action.requiresRelease()) {
                     releaseEffects += RouterEffect.Instrument(
                         gate.destination,
                         InstrumentAction.Release(gate.source, 0, timestampNanos),

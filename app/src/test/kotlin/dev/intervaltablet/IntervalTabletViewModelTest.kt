@@ -16,6 +16,12 @@ import dev.intervaltablet.data.ToneRowPlaybackSnapshotMode
 import dev.intervaltablet.data.ToneRowSnapshot
 import dev.intervaltablet.data.TransportOptionsSnapshot
 import dev.intervaltablet.domain.AudioCommand
+import dev.intervaltablet.domain.DefaultMidiMap
+import dev.intervaltablet.domain.MidiAction
+import dev.intervaltablet.domain.MidiBindingKey
+import dev.intervaltablet.domain.MidiMappingCapture
+import dev.intervaltablet.domain.MidiMappingEditorAction
+import dev.intervaltablet.domain.MidiMappingEditorState
 import dev.intervaltablet.domain.MidiMessage
 import dev.intervaltablet.domain.PadArticulation
 import dev.intervaltablet.domain.PassThroughMode
@@ -25,6 +31,7 @@ import dev.intervaltablet.domain.ToneRowMode
 import dev.intervaltablet.domain.TransportMode
 import dev.intervaltablet.midi.FakeMidiPortRepository
 import dev.intervaltablet.midi.MidiInputPacket
+import dev.intervaltablet.midi.MidiConnectionLossReason
 import dev.intervaltablet.midi.MidiPacketSink
 import dev.intervaltablet.midi.MidiPortDescriptor
 import dev.intervaltablet.midi.MidiPortDirection
@@ -289,6 +296,321 @@ class IntervalTabletViewModelTest {
                 sent.message is MidiMessage.SongSelect && sent.message.song == 8
             },
         )
+    }
+
+    @Test
+    fun midiLearnConsumesCapturedNoteBeforeRoutingThenCommitsOnceOnSave() {
+        val fixture = fixture(StoredSettings(workingPreset = preset()))
+        val midi = connectMidi(fixture)
+        scheduler.advanceTimeBy(200L)
+        drain()
+        fixture.settingsStore.updates.clear()
+        val baselineNote = fixture.viewModel.uiState.value.instrument.currentNote
+
+        fixture.viewModel.openMidiMappingEditor()
+        fixture.viewModel.onMidiMappingEditorAction(
+            MidiMappingEditorAction.Arm(MidiAction.Move(4)),
+        )
+        drain()
+        val sentBeforeCapture = fixture.midiRepository.sentMessages.size
+        assertTrue(
+            fixture.packetSink.offer(
+                MidiInputPacket(
+                    source = midi.source,
+                    generation = fixture.midiRepository.state.value.sourceConnection.generation,
+                    bytes = byteArrayOf(0x90.toByte(), 77, 100),
+                    timestampNanos = 3_200_000_000L,
+                ),
+            ),
+        )
+        drain()
+
+        val captured = fixture.viewModel.uiState.value
+            .midiMappingEditor as MidiMappingEditorState.Editing
+        assertEquals(baselineNote, fixture.viewModel.uiState.value.instrument.currentNote)
+        assertTrue(captured.capture is MidiMappingCapture.Captured)
+        assertEquals(sentBeforeCapture, fixture.midiRepository.sentMessages.size)
+        assertTrue(fixture.settingsStore.updates.isEmpty())
+
+        fixture.viewModel.onMidiMappingEditorAction(MidiMappingEditorAction.AddCandidate)
+        fixture.viewModel.saveMidiMappingEditor()
+        drain()
+        assertEquals(MidiMappingEditorState.Closed, fixture.viewModel.uiState.value.midiMappingEditor)
+        assertEquals(
+            MidiAction.Move(4),
+            fixture.viewModel.uiState.value.performance.mapping.bindings[
+                MidiBindingKey(MidiBindingKey.Kind.NOTE, 77, channel = 0)
+            ],
+        )
+        assertTrue(
+            fixture.packetSink.offer(
+                MidiInputPacket(
+                    source = midi.source,
+                    generation = fixture.midiRepository.state.value.sourceConnection.generation,
+                    bytes = byteArrayOf(0x80.toByte(), 77, 0),
+                    timestampNanos = 3_200_100_000L,
+                ),
+            ),
+        )
+        drain()
+        assertEquals(sentBeforeCapture, fixture.midiRepository.sentMessages.size)
+        assertEquals(baselineNote, fixture.viewModel.uiState.value.instrument.currentNote)
+        scheduler.advanceTimeBy(200L)
+        drain()
+        assertEquals(1, fixture.settingsStore.updates.size)
+    }
+
+    @Test
+    fun cancellingMidiLearnDiscardsDraftWithoutPersistence() {
+        val fixture = fixture(StoredSettings(workingPreset = preset()))
+        connectMidi(fixture)
+        scheduler.advanceTimeBy(200L)
+        drain()
+        fixture.settingsStore.updates.clear()
+        val deleted = MidiBindingKey(MidiBindingKey.Kind.NOTE, 77, channel = null)
+
+        fixture.viewModel.openMidiMappingEditor()
+        fixture.viewModel.onMidiMappingEditorAction(MidiMappingEditorAction.DeleteBinding(deleted))
+        drain()
+        val editing = fixture.viewModel.uiState.value
+            .midiMappingEditor as MidiMappingEditorState.Editing
+        assertFalse(editing.draft.bindings.containsKey(deleted))
+
+        fixture.viewModel.onMidiMappingEditorAction(MidiMappingEditorAction.Cancel)
+        drain()
+        scheduler.advanceTimeBy(200L)
+        drain()
+
+        assertEquals(MidiMappingEditorState.Closed, fixture.viewModel.uiState.value.midiMappingEditor)
+        assertEquals(DefaultMidiMap.mapping, fixture.viewModel.uiState.value.performance.mapping)
+        assertTrue(fixture.settingsStore.updates.isEmpty())
+    }
+
+    @Test
+    fun acceptedCcLearnGestureSuppressesHeldAndReleasePacketsAfterSave() {
+        val fixture = fixture(
+            StoredSettings(
+                workingPreset = preset(passThroughMode = PassThroughMode.PASS_THRU),
+            ),
+        )
+        val midi = connectMidi(fixture)
+        val baselineNote = fixture.viewModel.uiState.value.instrument.currentNote
+
+        fixture.viewModel.openMidiMappingEditor()
+        fixture.viewModel.onMidiMappingEditorAction(
+            MidiMappingEditorAction.Arm(MidiAction.Move(3)),
+        )
+        drain()
+        val sentBeforeCapture = fixture.midiRepository.sentMessages.size
+        assertTrue(
+            fixture.packetSink.offer(
+                MidiInputPacket(
+                    source = midi.source,
+                    generation = fixture.midiRepository.state.value.sourceConnection.generation,
+                    bytes = byteArrayOf(0xB0.toByte(), 74, 127),
+                    timestampNanos = 3_250_000_000L,
+                ),
+            ),
+        )
+        drain()
+        fixture.viewModel.onMidiMappingEditorAction(
+            MidiMappingEditorAction.SetCandidateThreshold(100),
+        )
+        fixture.viewModel.onMidiMappingEditorAction(MidiMappingEditorAction.AddCandidate)
+        fixture.viewModel.saveMidiMappingEditor()
+        drain()
+
+        assertTrue(
+            fixture.packetSink.offer(
+                MidiInputPacket(
+                    source = midi.source,
+                    generation = fixture.midiRepository.state.value.sourceConnection.generation,
+                    bytes = byteArrayOf(0xB0.toByte(), 74, 110),
+                    timestampNanos = 3_250_100_000L,
+                ),
+            ),
+        )
+        assertTrue(
+            fixture.packetSink.offer(
+                MidiInputPacket(
+                    source = midi.source,
+                    generation = fixture.midiRepository.state.value.sourceConnection.generation,
+                    bytes = byteArrayOf(0xB0.toByte(), 74, 80),
+                    timestampNanos = 3_250_200_000L,
+                ),
+            ),
+        )
+        drain()
+
+        assertEquals(sentBeforeCapture, fixture.midiRepository.sentMessages.size)
+        assertEquals(baselineNote, fixture.viewModel.uiState.value.instrument.currentNote)
+        assertEquals(PassThroughMode.PASS_THRU, fixture.viewModel.uiState.value.passThroughMode)
+        assertEquals(0, fixture.viewModel.uiState.value.selectedPresetSlot)
+
+        assertTrue(
+            fixture.packetSink.offer(
+                MidiInputPacket(
+                    source = midi.source,
+                    generation = fixture.midiRepository.state.value.sourceConnection.generation,
+                    bytes = byteArrayOf(0xB0.toByte(), 74, 127),
+                    timestampNanos = 3_250_300_000L,
+                ),
+            ),
+        )
+        drain()
+        assertEquals(sentBeforeCapture + 1, fixture.midiRepository.sentMessages.size)
+    }
+
+    @Test
+    fun sourceChangeAndLossCloseMidiLearnAndDiscardEachDraft() {
+        val fixture = fixture(StoredSettings(workingPreset = preset()))
+        val midi = connectMidi(fixture)
+        val alternateSource = MidiPortDescriptor(
+            deviceId = 13,
+            portNumber = 2,
+            direction = MidiPortDirection.SOURCE,
+            deviceName = "Alternate source",
+            portName = "Out",
+        )
+        fixture.midiRepository.setPorts(
+            listOf(midi.source, alternateSource) +
+                requireNotNull(fixture.midiRepository.state.value.selectedDestination),
+        )
+        drain()
+
+        fixture.viewModel.openMidiMappingEditor()
+        fixture.viewModel.onMidiMappingEditorAction(
+            MidiMappingEditorAction.DeleteBinding(
+                MidiBindingKey(MidiBindingKey.Kind.NOTE, 77, channel = null),
+            ),
+        )
+        drain()
+        fixture.viewModel.selectSource(alternateSource)
+        drain()
+
+        assertEquals(MidiMappingEditorState.Closed, fixture.viewModel.uiState.value.midiMappingEditor)
+        assertEquals(DefaultMidiMap.mapping, fixture.viewModel.uiState.value.performance.mapping)
+
+        fixture.viewModel.openMidiMappingEditor()
+        fixture.viewModel.onMidiMappingEditorAction(
+            MidiMappingEditorAction.DeleteBinding(
+                MidiBindingKey(MidiBindingKey.Kind.NOTE, 78, channel = null),
+            ),
+        )
+        drain()
+        fixture.midiRepository.simulateConnectionLoss(
+            MidiPortDirection.SOURCE,
+            MidiConnectionLossReason.PORT_DISAPPEARED,
+        )
+        drain()
+
+        assertEquals(MidiMappingEditorState.Closed, fixture.viewModel.uiState.value.midiMappingEditor)
+        assertEquals(DefaultMidiMap.mapping, fixture.viewModel.uiState.value.performance.mapping)
+    }
+
+    @Test
+    fun lockMidiRecallAndHostStopCloseEditorAndDiscardDraft() {
+        val fixture = fixture(
+            StoredSettings(
+                workingPreset = preset(rootPitchClass = 0),
+                presetBank = PresetBank(
+                    mapOf(
+                        5 to preset(rootPitchClass = 7),
+                        6 to preset(rootPitchClass = 9),
+                    ),
+                ),
+            ),
+        )
+        val midi = connectMidi(fixture)
+        val deleted = MidiBindingKey(MidiBindingKey.Kind.NOTE, 77, channel = null)
+        fun openChangedDraft() {
+            fixture.viewModel.openMidiMappingEditor()
+            fixture.viewModel.onMidiMappingEditorAction(
+                MidiMappingEditorAction.DeleteBinding(deleted),
+            )
+            drain()
+            val editing = fixture.viewModel.uiState.value
+                .midiMappingEditor as MidiMappingEditorState.Editing
+            assertFalse(editing.draft.bindings.containsKey(deleted))
+        }
+
+        openChangedDraft()
+        fixture.viewModel.togglePerformanceLock()
+        drain()
+        assertEquals(MidiMappingEditorState.Closed, fixture.viewModel.uiState.value.midiMappingEditor)
+        assertEquals(DefaultMidiMap.mapping, fixture.viewModel.uiState.value.performance.mapping)
+        fixture.viewModel.togglePerformanceLock()
+        drain()
+
+        openChangedDraft()
+        assertTrue(
+            fixture.packetSink.offer(
+                MidiInputPacket(
+                    source = midi.source,
+                    generation = fixture.midiRepository.state.value.sourceConnection.generation,
+                    bytes = byteArrayOf(0xC0.toByte(), 5),
+                    timestampNanos = 3_275_000_000L,
+                ),
+            ),
+        )
+        drain()
+        assertEquals(MidiMappingEditorState.Closed, fixture.viewModel.uiState.value.midiMappingEditor)
+        assertEquals(7, fixture.viewModel.uiState.value.instrument.config.rootPitchClass)
+        assertEquals(DefaultMidiMap.mapping, fixture.viewModel.uiState.value.performance.mapping)
+
+        openChangedDraft()
+        assertTrue(
+            fixture.packetSink.offer(
+                MidiInputPacket(
+                    source = midi.source,
+                    generation = fixture.midiRepository.state.value.sourceConnection.generation,
+                    bytes = byteArrayOf(0xF3.toByte(), 6),
+                    timestampNanos = 3_275_100_000L,
+                ),
+            ),
+        )
+        drain()
+        assertEquals(MidiMappingEditorState.Closed, fixture.viewModel.uiState.value.midiMappingEditor)
+        assertEquals(9, fixture.viewModel.uiState.value.instrument.config.rootPitchClass)
+        assertEquals(DefaultMidiMap.mapping, fixture.viewModel.uiState.value.performance.mapping)
+
+        openChangedDraft()
+        fixture.viewModel.onHostStop()
+        drain()
+        assertEquals(MidiMappingEditorState.Closed, fixture.viewModel.uiState.value.midiMappingEditor)
+        assertEquals(DefaultMidiMap.mapping, fixture.viewModel.uiState.value.performance.mapping)
+    }
+
+    @Test
+    fun mailboxOverflowRecoveryClosesMidiLearnAndDiscardsDraft() {
+        val fixture = fixture(StoredSettings(workingPreset = preset()))
+        val midi = connectMidi(fixture)
+        fixture.viewModel.openMidiMappingEditor()
+        fixture.viewModel.onMidiMappingEditorAction(
+            MidiMappingEditorAction.DeleteBinding(
+                MidiBindingKey(MidiBindingKey.Kind.NOTE, 77, channel = null),
+            ),
+        )
+        drain()
+        var rejectedPackets = 0
+        repeat(400) {
+            val accepted = fixture.packetSink.offer(
+                MidiInputPacket(
+                    source = midi.source,
+                    generation = fixture.midiRepository.state.value.sourceConnection.generation,
+                    bytes = byteArrayOf(0xFE.toByte()),
+                    timestampNanos = 3_300_000_000L + it,
+                ),
+            )
+            if (!accepted) rejectedPackets += 1
+        }
+        assertTrue(rejectedPackets > 0)
+        drain()
+
+        val state = fixture.viewModel.uiState.value
+        assertEquals(MidiMappingEditorState.Closed, state.midiMappingEditor)
+        assertEquals(DefaultMidiMap.mapping, state.performance.mapping)
+        assertTrue(state.droppedCoordinatorCommands > 0L)
     }
 
     @Test
@@ -819,7 +1141,8 @@ class IntervalTabletViewModelTest {
         val firstStepDelayMillis = ceilNanosToMillis(due - initialTime)
         scheduler.advanceTimeBy(firstStepDelayMillis)
         drain()
-        scheduler.advanceTimeBy(200L - firstStepDelayMillis)
+        // The durable RANDOM mutation opens its own bounded persistence window at the tick.
+        scheduler.advanceTimeBy(201L)
         drain()
 
         val after = fixture.viewModel.uiState.value.performance

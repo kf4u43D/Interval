@@ -1,6 +1,7 @@
 package dev.intervaltablet.domain
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -62,6 +63,42 @@ class MidiMappingTest {
 
         assertEquals(1, actions.size)
         assertEquals(InstrumentAction.UndoThenMove(source, -3, 90, 42), actions.single())
+    }
+
+    @Test
+    fun semanticActionsConvertToDistinctImmediateInstrumentActions() {
+        val source = TriggerSource.Midi(1, 0, 2, 75)
+
+        assertEquals(
+            InstrumentAction.PressSameInterval(source, 90, 42),
+            MidiAction.Same.toInstrumentActions(source, 90, 42).single(),
+        )
+        assertEquals(
+            InstrumentAction.PressSamePitch(source, 91, 43),
+            MidiAction.SamePitch.toInstrumentActions(source, 91, 43).single(),
+        )
+        assertEquals(
+            InstrumentAction.PressRandomInterval(source, 92, 44),
+            MidiAction.Random.toInstrumentActions(source, 92, 44).single(),
+        )
+        assertEquals(
+            InstrumentAction.HoldChromaticShift(source, -1, 45),
+            MidiAction.ChromaticShift(-1).toInstrumentActions(source, 127, 45).single(),
+        )
+    }
+
+    @Test
+    fun requiresReleaseIncludesSoundingActionsAndSilentMomentaryModifiersOnly() {
+        assertTrue(MidiAction.Same.requiresRelease())
+        assertTrue(MidiAction.SamePitch.requiresRelease())
+        assertTrue(MidiAction.Random.requiresRelease())
+        assertTrue(MidiAction.ChromaticShift(1).requiresRelease())
+        assertTrue(MidiAction.Home(sound = true).requiresRelease())
+
+        assertFalse(MidiAction.Home(sound = false).requiresRelease())
+        assertFalse(MidiAction.Play.requiresRelease())
+        assertFalse(MidiAction.Record.requiresRelease())
+        assertFalse(MidiAction.TogglePassThrough.requiresRelease())
     }
 
     @Test

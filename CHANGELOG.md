@@ -4,17 +4,23 @@
 
 ### Added
 
-- Dépôt Git local initialisé sur `main` et Gradle Wrapper officiel 8.13 ajouté avec JAR et
-  distribution protégés par leurs empreintes SHA-256 ; aucun remote ni publication.
+- Dépôt Git local initialisé sur `main`, remote `origin` configuré et Gradle Wrapper
+  officiel 8.13 ajouté avec JAR et distribution protégés par leurs empreintes SHA-256.
 - Workspace VS Code/Codex et documentation d’architecture.
 - Socle Kotlin pur pour navigation intervallique, accords et routage MIDI.
 - UI Compose de performance et adaptateurs Android de départ.
 - Moteur audio Oboe/DSP minimal et tests natifs hôte.
-- Trois étapes Codex autonomes avec critères d’acceptation.
+- Quatre étapes Codex autonomes avec critères d’acceptation.
 - Parseur MIDI incrémental testé : running status, temps réel intercalé, SysEx et messages fragmentés.
 - Audit de structure portable et compilation hôte du pont JNI/Oboe contre stubs.
 - Traçabilité vers le guide utilisateur, protocole matériel et rapport de vérification.
-- CI GitHub Actions, Dependabot et procédure d’initialisation du futur dépôt.
+- CI GitHub Actions, Dependabot et procédure de protection/configuration du dépôt.
+- Reducer pur d'éditeur MIDI Learn avec baseline, brouillon, capture Note/CC, canal reçu
+  ou Omni, seuil CC, collision exacte, recouvrement Omni et commit atomique.
+- Panneau MIDI Learn dédié avec états attente/candidat/conflit, ajout/remplacement,
+  suppression, reset, Save et Cancel.
+- Quatre parcours Tone Row supplémentaires : Auto-Transpose haut/bas et Auto-Translate
+  haut/bas, portant le total à huit.
 - Prévisualisation pure des déplacements, degré courant et indications de limite
   clamp/wrap pour l'interface de performance.
 - Repository Android MIDI injectable avec catalogue de ports, états de connexion,
@@ -72,8 +78,22 @@
 - Écran de performance rendu tolérant aux tailles compactes et aux recréations sans
   reproduire l'apparence du matériel de référence.
 - Dépendances Android alignées sur la ligne compatible compile/target SDK 36.
-- Les actions mappées Random, ChromaticShift, Play, Stop et Record rejoignent désormais
-  le même reducer Tone Row que la surface tactile.
+- Random mappé joue désormais immédiatement un intervalle déterministe `-14…+14` dans le
+  reducer d'instrument ; il ne sélectionne plus le mode Random Tone Row.
+- Chromatic Shift mappé devient un modificateur silencieux et momentané, possédé par sa
+  Note ou son gate CC jusqu'au relâchement, à la purge ou au Panic.
+- Same Interval répète le dernier mouvement diatonique, tandis que Same Pitch répète le
+  dernier écart chromatique réellement entendu.
+- Play, Stop et Record restent reliés au reducer Tone Row ; un second Record annule la
+  prise en cours.
+- La lecture manuelle Tone Row reste disponible en Pause. Une Note MIDI fournit une
+  vélocité live pour l'émission sans modifier l'entrée enregistrée.
+- Random Tone Row part du premier élément et conserve le signe du pas demandé avec une
+  magnitude `0…2×|pas|` ; les modes Auto accumulent leur demi-ton/degré par cycle.
+- La capture Learn est interceptée avant politique Program/Song Select et routage ; seul
+  Save remplace/persiste le mapping courant, tandis que Cancel jette le brouillon.
+- Mapping v1 est conservé ; les presets existants ne changent qu'après resauvegarde
+  explicite de leur slot.
 - Les notes Tone Row passent par `PressAbsolute`, le voicing et le registre d'ownership
   existants ; l'horloge et les releases planifiées reviennent dans la mailbox applicative.
 - Les snapshots restaurent contenu, contexte, mapping, routage et options, mais jamais
@@ -177,6 +197,16 @@
   y compris lorsqu'il change pendant la fenêtre de récupération native.
 - Panneau synthé désactivé jusqu'au chargement DataStore afin qu'aucun draft affiché ne
   puisse diverger silencieusement de l'état appliqué et persistant.
+
+### Deferred
+
+- Rest, Random Step et Ratchet dans les séquences ; Ratchet attend un scheduler de
+  retrigger annulable par génération.
+- Émission MIDI Clock/Start/Stop/Continue et Song Position Pointer.
+- Actions mappées de gamme/clé/accord/preset, CC relatifs/continus, profils et
+  import/export.
+- Catalogues étendus de gammes/presets, optimisation soutenue à 90 Hz et certification
+  USB MIDI/Learn, TalkBack, vrai multi-touch, loopback/hotplug et soak.
 
 ### Verified
 

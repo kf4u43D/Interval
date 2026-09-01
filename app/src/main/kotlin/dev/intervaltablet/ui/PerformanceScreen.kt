@@ -102,6 +102,7 @@ import dev.intervaltablet.navigationAnchor
 import dev.intervaltablet.domain.ChordDefinition
 import dev.intervaltablet.domain.ChordLibrary
 import dev.intervaltablet.domain.InstrumentConfig
+import dev.intervaltablet.domain.MidiMappingEditorAction
 import dev.intervaltablet.domain.MidiNoteRange
 import dev.intervaltablet.domain.PadArticulation
 import dev.intervaltablet.domain.PassThroughMode
@@ -197,6 +198,9 @@ fun PerformanceScreen(
     onDismissStatus: () -> Unit,
     onSynthPatchPreview: (SynthPatch) -> Unit = {},
     onSynthPatchChangeFinished: (SynthPatch) -> Unit = {},
+    onOpenMidiMappingEditor: () -> Unit = {},
+    onMidiMappingEditorAction: (MidiMappingEditorAction) -> Unit = {},
+    onSaveMidiMappingEditor: () -> Unit = {},
 ) {
     val appState = rememberUpdatedState(state)
     val providedToneRowState = rememberUpdatedState(toneRowState)
@@ -240,6 +244,9 @@ fun PerformanceScreen(
         onDismissStatus = onDismissStatus,
         onSynthPatchPreview = onSynthPatchPreview,
         onSynthPatchChangeFinished = onSynthPatchChangeFinished,
+        onOpenMidiMappingEditor = onOpenMidiMappingEditor,
+        onMidiMappingEditorAction = onMidiMappingEditorAction,
+        onSaveMidiMappingEditor = onSaveMidiMappingEditor,
     )
 }
 
@@ -273,6 +280,9 @@ internal fun ProjectedPerformanceScreen(
     onDismissStatus: () -> Unit,
     onSynthPatchPreview: (SynthPatch) -> Unit = {},
     onSynthPatchChangeFinished: (SynthPatch) -> Unit = {},
+    onOpenMidiMappingEditor: () -> Unit = {},
+    onMidiMappingEditorAction: (MidiMappingEditorAction) -> Unit = {},
+    onSaveMidiMappingEditor: () -> Unit = {},
 ) {
     var consoleOpen by rememberSaveable { mutableStateOf(false) }
     var toneRowArrangementOpen by rememberSaveable { mutableStateOf(false) }
@@ -445,6 +455,7 @@ internal fun ProjectedPerformanceScreen(
 
                     PerformanceOverlay(
                         consoleState = projections.console,
+                        midiMappingEditorState = projections.midiMappingEditor,
                         synthState = projections.synth,
                         toneRowContentState = toneRowContentState,
                         toneRowCursorState = toneRowCursorState,
@@ -469,6 +480,9 @@ internal fun ProjectedPerformanceScreen(
                         onSelectSource = onSelectSource,
                         onSelectDestination = onSelectDestination,
                         onResetMidiMapping = onResetMidiMapping,
+                        onOpenMidiMappingEditor = onOpenMidiMappingEditor,
+                        onMidiMappingEditorAction = onMidiMappingEditorAction,
+                        onSaveMidiMappingEditor = onSaveMidiMappingEditor,
                         onTogglePerformanceLock = onTogglePerformanceLock,
                         onSynthPatchPreview = onSynthPatchPreview,
                         onSynthPatchChangeFinished = onSynthPatchChangeFinished,
@@ -675,6 +689,7 @@ private fun ProjectedSystemRibbon(
 @Composable
 private fun BoxScope.PerformanceOverlay(
     consoleState: State<PerformanceConsoleUiState>,
+    midiMappingEditorState: State<MidiMappingEditorUiState>,
     synthState: State<PerformanceSynthUiState>,
     toneRowContentState: State<ToneRowContentUiState>,
     toneRowCursorState: State<ToneRowCursorUiState>,
@@ -699,12 +714,28 @@ private fun BoxScope.PerformanceOverlay(
     onSelectSource: (MidiPortDescriptor?) -> Unit,
     onSelectDestination: (MidiPortDescriptor?) -> Unit,
     onResetMidiMapping: () -> Unit,
+    onOpenMidiMappingEditor: () -> Unit,
+    onMidiMappingEditorAction: (MidiMappingEditorAction) -> Unit,
+    onSaveMidiMappingEditor: () -> Unit,
     onTogglePerformanceLock: () -> Unit,
     onSynthPatchPreview: (SynthPatch) -> Unit,
     onSynthPatchChangeFinished: (SynthPatch) -> Unit,
 ) {
     if (lockState.value.locked) return
-    if (arrangementOpen) {
+    if (midiMappingEditorState.value.editor is dev.intervaltablet.domain.MidiMappingEditorState.Editing) {
+        val panelMargin = if (compact) 16.dp else 120.dp
+        val maximumPanelWidth = (availableWidth - panelMargin).coerceAtLeast(320.dp)
+        MidiMappingEditorPanel(
+            state = midiMappingEditorState.value,
+            onAction = onMidiMappingEditorAction,
+            onSave = onSaveMidiMappingEditor,
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .width((if (compact) 520.dp else 720.dp).coerceAtMost(maximumPanelWidth))
+                .fillMaxHeight()
+                .shadow(22.dp, StageShape),
+        )
+    } else if (arrangementOpen) {
         ToneRowArrangementPanel(
             state = toneRowContentState,
             cursorState = toneRowCursorState,
@@ -731,6 +762,7 @@ private fun BoxScope.PerformanceOverlay(
             onSelectSource = onSelectSource,
             onSelectDestination = onSelectDestination,
             onResetMidiMapping = onResetMidiMapping,
+            onOpenMidiMappingEditor = onOpenMidiMappingEditor,
             onTogglePerformanceLock = onTogglePerformanceLock,
             modifier = Modifier
                 .align(Alignment.CenterEnd)
@@ -2363,6 +2395,7 @@ private fun MidiConsole(
     onSelectSource: (MidiPortDescriptor?) -> Unit,
     onSelectDestination: (MidiPortDescriptor?) -> Unit,
     onResetMidiMapping: () -> Unit,
+    onOpenMidiMappingEditor: () -> Unit,
     onTogglePerformanceLock: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -2487,6 +2520,22 @@ private fun MidiConsole(
                     },
                     style = MaterialTheme.typography.bodyMedium,
                 )
+                Text(
+                    pluralStringResource(
+                        R.plurals.midi_mapping_binding_count,
+                        state.mappingCount,
+                        state.mappingCount,
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(
+                    onClick = onOpenMidiMappingEditor,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                    shape = ControlShape,
+                ) {
+                    Text(stringResource(R.string.midi_mapping_edit))
+                }
                 OutlinedButton(
                     onClick = onResetMidiMapping,
                     enabled = state.mappingCustomized,

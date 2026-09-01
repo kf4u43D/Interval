@@ -5,6 +5,10 @@ import kotlin.math.max
 const val MIN_INTERVAL_STEPS: Int = -14
 const val MAX_INTERVAL_STEPS: Int = 14
 
+private const val DEFAULT_INSTRUMENT_RANDOM_SEED: Long = 0x49544C524E44
+private const val RANDOM_MULTIPLIER: Long = 6364136223846793005L
+private const val RANDOM_INCREMENT: Long = 1442695040888963407L
+
 enum class PadArticulation {
     ARPEGGIATED,
     STACKED,
@@ -53,13 +57,28 @@ data class InstrumentState(
     val previousDistinctNotes: List<Int> = emptyList(),
     val activeBySource: Map<TriggerSource, List<ActiveNoteInstance>> = emptyMap(),
     val lastExternalNote: Int? = null,
+    val lastIntervalSteps: Int = 0,
+    val lastSoundedLeadNote: Int? = null,
+    val lastPitchDeltaSemitones: Int = 0,
+    val randomState: Long = DEFAULT_INSTRUMENT_RANDOM_SEED,
+    val chromaticShiftBySource: Map<TriggerSource, Int> = emptyMap(),
 ) {
     init {
         require(config.range.contains(currentNote)) { "currentNote must belong to the configured range" }
         require(lastExternalNote == null || lastExternalNote in 0..127)
+        require(lastIntervalSteps in MIN_INTERVAL_STEPS..MAX_INTERVAL_STEPS)
+        require(lastSoundedLeadNote == null || lastSoundedLeadNote in 0..127)
+        require(lastPitchDeltaSemitones in -127..127)
+        require(chromaticShiftBySource.values.all { it in -12..12 })
     }
 
     val activeInstanceCount: Int get() = activeBySource.values.sumOf { it.size }
+
+    val activeChromaticShiftSemitones: Int
+        get() = chromaticShiftBySource.values
+            .fold(0L) { total, shift -> total + shift.toLong() }
+            .coerceIn(-127L, 127L)
+            .toInt()
 }
 
 sealed interface InstrumentAction {
@@ -84,6 +103,47 @@ sealed interface InstrumentAction {
         init {
             require(semitones in -127..127)
             require(velocity in 1..127)
+        }
+    }
+
+    data class PressSameInterval(
+        val source: TriggerSource,
+        val velocity: Int,
+        val timestampNanos: Long = 0L,
+    ) : InstrumentAction {
+        init {
+            require(velocity in 1..127)
+        }
+    }
+
+    data class PressSamePitch(
+        val source: TriggerSource,
+        val velocity: Int,
+        val timestampNanos: Long = 0L,
+    ) : InstrumentAction {
+        init {
+            require(velocity in 1..127)
+        }
+    }
+
+    data class PressRandomInterval(
+        val source: TriggerSource,
+        val velocity: Int,
+        val timestampNanos: Long = 0L,
+    ) : InstrumentAction {
+        init {
+            require(velocity in 1..127)
+        }
+    }
+
+    /** A silent, source-owned modifier applied only to notes started while it is held. */
+    data class HoldChromaticShift(
+        val source: TriggerSource,
+        val semitones: Int,
+        val timestampNanos: Long = 0L,
+    ) : InstrumentAction {
+        init {
+            require(semitones in -12..12)
         }
     }
 
@@ -227,6 +287,42 @@ class IntervalReducer {
                 timestampNanos = action.timestampNanos,
                 pushHistory = action.semitones != 0,
             )
+            is InstrumentAction.PressSameInterval -> pressInterval(
+                state,
+                InstrumentAction.PressInterval(
+                    source = action.source,
+                    steps = state.lastIntervalSteps,
+                    velocity = action.velocity,
+                    timestampNanos = action.timestampNanos,
+                ),
+            )
+            is InstrumentAction.PressSamePitch -> {
+                val consumesExternalAnchor = state.lastExternalNote != null
+                val grid = state.config.grid()
+                val unshiftedAnchor = state.lastExternalNote ?: state.currentNote
+                val transition = press(
+                    state = state,
+                    source = action.source,
+                    target = grid.moveChromatic(unshiftedAnchor, state.lastPitchDeltaSemitones),
+                    velocity = action.velocity,
+                    timestampNanos = action.timestampNanos,
+                    pushHistory = state.lastPitchDeltaSemitones != 0,
+                    articulation = state.config.padArticulation,
+                )
+                if (consumesExternalAnchor) {
+                    transition.copy(state = transition.state.copy(lastExternalNote = null))
+                } else {
+                    transition
+                }
+            }
+            is InstrumentAction.PressRandomInterval -> pressRandomInterval(state, action)
+            is InstrumentAction.HoldChromaticShift -> InstrumentTransition(
+                state = state.copy(
+                    chromaticShiftBySource = state.chromaticShiftBySource +
+                        (action.source to action.semitones),
+                ),
+                events = emptyList(),
+            )
             is InstrumentAction.PressAbsolute -> press(
                 state = state,
                 source = action.source,
@@ -255,6 +351,7 @@ class IntervalReducer {
                 state.copy(
                     currentNote = action.note.coerceIn(state.config.range.min, state.config.range.max),
                     lastExternalNote = action.note,
+                    lastSoundedLeadNote = action.note,
                 ),
                 emptyList(),
             )
@@ -320,11 +417,31 @@ class IntervalReducer {
             pushHistory = action.steps != 0,
             articulation = state.config.padArticulation,
         )
-        return if (consumesExternalAnchor) {
-            transition.copy(state = transition.state.copy(lastExternalNote = null))
-        } else {
-            transition
-        }
+        return transition.copy(
+            state = transition.state.copy(
+                lastExternalNote = if (consumesExternalAnchor) null else transition.state.lastExternalNote,
+                lastIntervalSteps = action.steps,
+            ),
+        )
+    }
+
+    private fun pressRandomInterval(
+        state: InstrumentState,
+        action: InstrumentAction.PressRandomInterval,
+    ): InstrumentTransition {
+        val nextRandomState = nextRandom(state.randomState)
+        val span = MAX_INTERVAL_STEPS - MIN_INTERVAL_STEPS + 1
+        val mixed = nextRandomState xor (nextRandomState ushr 33)
+        val steps = MIN_INTERVAL_STEPS + floorMod((mixed ushr 1).toInt(), span)
+        return pressInterval(
+            state.copy(randomState = nextRandomState),
+            InstrumentAction.PressInterval(
+                source = action.source,
+                steps = steps,
+                velocity = action.velocity,
+                timestampNanos = action.timestampNanos,
+            ),
+        )
     }
 
     private fun press(
@@ -345,11 +462,16 @@ class IntervalReducer {
             releasedState.previousDistinctNotes
         }
         val fullVoicing = buildChord(releasedState.config, target, velocity)
-        val instances = when (articulation) {
+        val unshiftedInstances = when (articulation) {
             PadArticulation.ARPEGGIATED -> fullVoicing.take(1)
             PadArticulation.STACKED -> fullVoicing
             PadArticulation.MUTED -> emptyList()
         }
+        val instances = shiftInstances(
+            config = releasedState.config,
+            instances = unshiftedInstances,
+            semitones = releasedState.activeChromaticShiftSemitones,
+        )
         val nextActive = if (instances.isEmpty()) {
             releasedState.activeBySource
         } else {
@@ -363,11 +485,19 @@ class IntervalReducer {
                 OutputEvent.Audio(AudioCommand.NoteOn(instance.note, instance.velocity)),
             )
         }
+        val soundedLead = instances.firstOrNull()?.note
+        val nextPitchDelta = if (soundedLead != null && releasedState.lastSoundedLeadNote != null) {
+            soundedLead - releasedState.lastSoundedLeadNote
+        } else {
+            releasedState.lastPitchDeltaSemitones
+        }
         return InstrumentTransition(
             state = releasedState.copy(
                 currentNote = target,
                 previousDistinctNotes = history,
                 activeBySource = nextActive,
+                lastSoundedLeadNote = soundedLead ?: releasedState.lastSoundedLeadNote,
+                lastPitchDeltaSemitones = nextPitchDelta,
             ),
             events = release.events + noteOns,
         )
@@ -380,11 +510,17 @@ class IntervalReducer {
         val note = state.strumNotes().getOrNull(action.voiceIndex)
             ?: return InstrumentTransition(state, emptyList())
         val released = releaseSource(state, action.source, 0, action.timestampNanos)
-        val instance = ActiveNoteInstance(
-            note = note,
-            velocity = action.velocity,
-            channel = released.state.config.outputChannel,
-        )
+        val instance = shiftInstances(
+            config = released.state.config,
+            instances = listOf(
+                ActiveNoteInstance(
+                    note = note,
+                    velocity = action.velocity,
+                    channel = released.state.config.outputChannel,
+                ),
+            ),
+            semitones = released.state.activeChromaticShiftSemitones,
+        ).single()
         return InstrumentTransition(
             state = released.state.copy(
                 activeBySource = released.state.activeBySource + (action.source to listOf(instance)),
@@ -427,13 +563,16 @@ class IntervalReducer {
             state.previousDistinctNotes.dropLast(1)
         }
         val base = state.copy(currentNote = previous, previousDistinctNotes = trimmed)
-        return press(
+        val transition = press(
             state = base,
             source = action.source,
             target = base.config.grid().move(previous, action.steps),
             velocity = action.velocity,
             timestampNanos = action.timestampNanos,
             pushHistory = action.steps != 0,
+        )
+        return transition.copy(
+            state = transition.state.copy(lastIntervalSteps = action.steps),
         )
     }
 
@@ -468,7 +607,6 @@ class IntervalReducer {
         timestampNanos: Long,
     ): InstrumentTransition {
         val instances = state.activeBySource[source].orEmpty()
-        if (instances.isEmpty()) return InstrumentTransition(state, emptyList())
         val events = instances.flatMap { instance ->
             listOf(
                 OutputEvent.MidiOut(
@@ -477,7 +615,13 @@ class IntervalReducer {
                 OutputEvent.Audio(AudioCommand.NoteOff(instance.note)),
             )
         }
-        return InstrumentTransition(state.copy(activeBySource = state.activeBySource - source), events)
+        return InstrumentTransition(
+            state.copy(
+                activeBySource = state.activeBySource - source,
+                chromaticShiftBySource = state.chromaticShiftBySource - source,
+            ),
+            events,
+        )
     }
 
     private fun releaseAll(state: InstrumentState, actionTimestamp: Long): Pair<InstrumentState, List<OutputEvent>> {
@@ -487,7 +631,10 @@ class IntervalReducer {
                 OutputEvent.Audio(AudioCommand.NoteOff(instance.note)),
             )
         }
-        return state.copy(activeBySource = emptyMap()) to events
+        return state.copy(
+            activeBySource = emptyMap(),
+            chromaticShiftBySource = emptyMap(),
+        ) to events
     }
 
     private fun reconfigure(
@@ -516,6 +663,20 @@ class IntervalReducer {
             )
         }
     }
+
+    private fun shiftInstances(
+        config: InstrumentConfig,
+        instances: List<ActiveNoteInstance>,
+        semitones: Int,
+    ): List<ActiveNoteInstance> {
+        if (semitones == 0) return instances
+        val grid = config.grid()
+        return instances.map { instance ->
+            instance.copy(note = grid.moveChromatic(instance.note, semitones))
+        }
+    }
+
+    private fun nextRandom(value: Long): Long = value * RANDOM_MULTIPLIER + RANDOM_INCREMENT
 
 }
 

@@ -3,10 +3,10 @@
 ## Vue d’ensemble
 
 ```text
-Compose UI ─┐
-Android MIDI ├─> actor ViewModel ─> app coordinator ─> reducers purs ─┬─> MIDI output
-Clock interne ─┘                                                    ├─> Native audio queue
-                                                                      └─> release planifiée
+Compose UI ─────┐
+Android MIDI ───┼─> actor ViewModel ─> capture Learn? ─> app coordinator ─> reducers purs ─┬─> MIDI output
+Clock interne ──┘                         │                                              ├─> Native audio queue
+                                          └─> brouillon/commit mapping                    └─> release planifiée
 
 DataStore <──── session/preset bank serialization ────> actor ViewModel
 
@@ -24,6 +24,8 @@ Kotlin/JVM pur. Il contient :
 - accords et instances actives ;
 - articulation des pads et projection déterministe du voicing pour le strummer ;
 - mapping/routage MIDI ;
+- reducer transactionnel de l'éditeur MIDI Learn, avec baseline, brouillon, candidat,
+  conflits et événement de commit ;
 - Tone Row et transport ;
 - contrat `SynthPatch` immutable et seize paramètres audio typés aux identifiants filaires
   explicites `0…15` ;
@@ -47,6 +49,14 @@ consommée hors du thread UI par un dispatcher mono-thread injectable. Les callb
 déposent des intentions brutes ; vélocité, reducers, horloge, gates et one-shots sont résolus
 dans cet acteur. Le coordinateur compose ensuite `IntervalReducer`, `ToneRowReducer`,
 `TransportReducer` et `MidiRouter` en préservant un ordre total des effets.
+
+Lorsqu'une capture MIDI Learn est armée, l'acteur présente chaque message parsé au
+`MidiMappingEditorReducer` avant `PresetMidiPolicy` et `MidiRouter`. Un message Note/CC
+consommé par l'éditeur ne peut donc ni rappeler, ni jouer, ni traverser. Armer demande
+Panic ; Add/Replace/Delete/Reset ne modifient qu'un brouillon. Le seul événement
+`CommitRequested` installe ensuite le mapping par la commande applicative normale et
+déclenche sa persistance. Cancel, arrêt d'hôte, Performance Lock, perte de source et
+récupération d'overflow ferment la transaction sans sérialiser son état transitoire.
 
 Compose ne calcule aucune harmonie : la projection du strummer appelle `strumNotes()` du
 domaine. Les gestes ne déposent que des couples index/vélocité ; l'acteur les transforme
@@ -101,15 +111,17 @@ Exécutable CMake hôte qui compile les primitives DSP sans Android ni Oboe. Il 
 
 1. Un bouton Compose, une intention Tone Row, une échéance interne ou un message MIDI
    dépose une commande horodatée dans la mailbox bornée.
-2. Le coordinateur appelle le reducer concerné. Une action Tone Row automatique devient
+2. Un message MIDI passe d'abord par une éventuelle capture Learn, puis par la politique
+   de preset et le routeur seulement s'il n'a pas été consommé.
+3. Le coordinateur appelle le reducer concerné. Une action Tone Row automatique devient
    `InstrumentAction.PressAbsolute` et conserve le voicing historique ; un geste de pad
    en Record/Manual devient `PressPadAbsolute` et respecte l'articulation. Le strummer
    utilise `StrumTone`. Voicing et ownership restent ainsi uniques dans le domaine.
-3. Les reducers retournent de nouveaux états et des listes ordonnées d'événements.
-4. Les événements sont dispatchés immédiatement vers MIDI Out et/ou audio interne selon la
+4. Les reducers retournent de nouveaux états et des listes ordonnées d'événements.
+5. Les événements sont dispatchés immédiatement vers MIDI Out et/ou audio interne selon la
    configuration ; la persistance et la présentation ne précèdent jamais ce dispatch.
-5. L’état devient la source unique de l’UI, via des projections structurelles étroites.
-6. Toute erreur d’adaptateur remonte comme état de capacité, jamais comme mutation implicite du domaine.
+6. L’état devient la source unique de l’UI, via des projections structurelles étroites.
+7. Toute erreur d’adaptateur remonte comme état de capacité, jamais comme mutation implicite du domaine.
 
 Une voix automatique Tone Row reçoit une origine système unique et mémorise aussi la
 destination qui a accepté son Note On. Avant la note suivante, Pause, Stop, Panic ou
@@ -172,9 +184,15 @@ rappel UI, Program Change ou Song Select ne change le son du moniteur. Les ident
 Android de session ne sont pas persistés seuls.
 
 Les snapshots excluent intentionnellement les notes actives, les curseurs temporaires,
-les compteurs de transport et les deadlines. Une restauration conserve la destination
-physique actuellement ouverte, remet Tone Row à `Idle` et le transport à `Stopped`; les
+les compteurs de transport, les deadlines et toute transaction/capture MIDI Learn. Une
+restauration conserve la destination physique actuellement ouverte, remet Tone Row à
+`Idle` et le transport à `Stopped`; les
 identités de ports restaurées servent de préférences de reconnexion.
+
+Le mapping validé reste dans Settings et dans les snapshots musicaux. Modifier le mapping
+de la session ne réécrit pas les 128 presets : un slot existant ne change qu'après sa
+propre sauvegarde. Le format Mapping v1 reste suffisant pour les clés Note/CC, actions et
+seuils actuels.
 
 ## Observabilité
 
@@ -194,7 +212,19 @@ articulation/strummer, console, statut et synthé/diagnostics. Les pads conserve
 distincts mais dessinent leur contenu via cache afin qu'un tick n'impose pas neuf sous-arbres
 Material complets.
 
-Le gate JVM final couvre ce découpage, le contrat audio, ses migrations et les aperçus
-transitoires avec 94 tests domaine et 140 tests application, soit 234/234.
+Le dernier gate JVM chiffré du MVP couvre ce découpage, le contrat audio, ses migrations
+et les aperçus transitoires avec 94 tests domaine et 140 tests application, soit 234/234.
+Ces nombres précèdent la V2 ; son reducer d'éditeur et son interception doivent être
+revalidés dans le prochain gate complet.
 
 Aucune télémétrie réseau dans le MVP.
+
+## Extensions différées
+
+Le modèle de séquence reste une liste de mouvements entiers. Rest, Random Step et Ratchet
+attendent des actions typées ; Ratchet requiert plusieurs Note On futurs annulables par
+génération, ce que le job unique de release ne doit pas simuler. La génération MIDI
+Clock/transport et Song Position Pointer, le catalogue étendu d'actions mappables, les
+CC relatifs/continus, gammes/presets étendus et l'optimisation soutenue à 90 Hz restent
+hors de l'architecture V2. CV, réseau, Scala, microtonalité, MPE et MIDI 2.0 restent hors
+des étapes engagées.

@@ -69,7 +69,16 @@ data class ToneRowEntrySnapshot(
     }
 }
 
-enum class ToneRowPlaybackSnapshotMode { PRIME, RETRO, RANDOM, PENDULUM }
+enum class ToneRowPlaybackSnapshotMode {
+    PRIME,
+    RETRO,
+    RANDOM,
+    PENDULUM,
+    AUTO_TRANSPOSE_UP,
+    AUTO_TRANSPOSE_DOWN,
+    AUTO_TRANSLATE_UP,
+    AUTO_TRANSLATE_DOWN,
+}
 
 data class ToneRowSnapshot(
     val entries: List<ToneRowEntrySnapshot> = emptyList(),

@@ -4,21 +4,31 @@ Prototype d’instrument intervallique pour tablette Android, conçu d’abord c
 
 Le comportement cible est documenté à partir des fonctions observables décrites dans le guide utilisateur Misha d’Eventide. Le projet est une réimplémentation indépendante : il ne contient ni firmware, ni code, ni graphismes, ni ressources propriétaires d’Eventide.
 
-## Périmètre MVP
+## Périmètre actuel
 
 - Navigation par degrés de gamme avec les neuf actions `-4 … 0 … +4`.
 - Gammes 12-TET seulement ; aucune microtonalité dans ce cycle.
 - MIDI USB entrant et sortant, sélection des ports, mapping notes/CC, panique MIDI.
 - Modes de routage `Off`, `Active`, `Active Last Note` et `PassThru`.
-- Tone Row : enregistrement, lecture manuelle, séquence automatique, transformations principales.
+- Tone Row : enregistrement, lecture manuelle, séquence automatique, transformations principales
+  et huit parcours (`Prime`, `Retro`, `Random`, `Pendulum`, Auto-Transpose haut/bas et
+  Auto-Translate haut/bas).
+- Fonctions de jeu V2 : `Same Interval` et `Same Pitch` distincts, intervalle aléatoire
+  immédiat et Chromatic Shift momentané.
+- Éditeur MIDI Learn transactionnel pour Notes/CC, canal reçu ou Omni, seuil de CC,
+  résolution explicite des conflits et validation/annulation atomique.
 - Accords jusqu’à trois notes, trois articulations de pads (`ARPEGGIATED`, `STACKED`,
   `MUTED`) et strummer tactile pour égrener le voicing courant.
-- Horloge MIDI, Start, Stop et Continue.
+- Horloge MIDI **entrante**, Start, Stop et Continue.
 - Synthèse interne optionnelle : patch typé de 16 paramètres, oscillateurs soustractifs,
   filtre, ADSR, chorus, delay, réverbération et panneau de contrôle non modal.
 - Interface paysage adaptée à une tablette 10–11 pouces.
 
-Hors MVP : CV, USB audio multicanal, Wi‑Fi/RTP-MIDI, Ableton Link, Bluetooth MIDI, Scala/MPE/MIDI 2.0 et microtonalité.
+Rest, Random Step et Ratchet dans la séquence, l'horloge/transport MIDI sortants, Song
+Position Pointer, le catalogue étendu d'actions mappables, les gammes/presets étendus et
+l'optimisation soutenue à 90 Hz restent différés après cette V2. CV, USB audio
+multicanal, Wi‑Fi/RTP-MIDI, Ableton Link, Bluetooth MIDI, Scala/MPE/MIDI 2.0 et
+microtonalité restent hors périmètre.
 
 ## Démarrage
 
@@ -59,8 +69,9 @@ Sous Windows PowerShell :
    - `codex/prompts/01_midi_core.md`
    - `codex/prompts/02_tone_row_transport.md`
    - `codex/prompts/03_audio_ui_hardening.md`
-3. Utiliser `./scripts/codex-stage.sh 1`, `2` ou `3` pour lancer une étape en mode écriture contrôlé.
-4. Ne renseigner le remote Git que plus tard avec `./scripts/init-git.sh <url>`.
+   - `codex/prompts/04_v2_performance_midi_learn.md`
+3. Utiliser le lanceur d'étape correspondant pour exécuter un seul lot en mode écriture
+   contrôlé.
 
 L’état du programme de développement est conservé dans `.codex/state.json` et `docs/IMPLEMENTATION_STATUS.md`.
 
@@ -71,7 +82,7 @@ L’état du programme de développement est conservé dans `.codex/state.json` 
 - `app/src/main/cpp/` : moteur temps réel Oboe et DSP sans allocation dans le callback.
 - `native-tests/` : tests DSP compilables sur l’hôte sans SDK Android.
 - `docs/` : spécifications, traçabilité du guide, protocole matériel, architecture et validation.
-- `codex/prompts/` : trois lots autonomes et significatifs.
+- `codex/prompts/` : quatre lots autonomes et significatifs.
 
 ## État d'implémentation
 
@@ -83,6 +94,22 @@ transport rejoignent des reducers déterministes. Tone Row couvre l'enregistreme
 transformations, Play Once et une séquence de mouvements éditable. L'horloge interne et
 le MIDI Clock 24 PPQ sont exclusifs et les notes restent possédées par leur origine jusqu'à
 leur libération.
+
+La V2 ajoute une sémantique de performance plus fidèle. `Same Interval` répète le dernier
+déplacement diatonique, tandis que `Same Pitch` répète le dernier écart chromatique
+réellement entendu. `Random` joue immédiatement un déplacement pseudo-aléatoire
+déterministe et Chromatic Shift agit silencieusement tant que sa Note ou son CC reste
+tenu. Une seconde pression sur Record abandonne la prise en cours ; une rangée en pause
+reste navigable et une Note MIDI peut remplacer la vélocité enregistrée pour la seule
+émission courante.
+
+Tone Row expose huit parcours. Son Random démarre au premier élément puis conserve le
+signe de chaque pas demandé en faisant varier sa magnitude entre zéro et le double. Les
+quatre parcours Auto-Transpose/Auto-Translate accumulent leur transformation par cycle
+logique. L'éditeur MIDI Learn maintient une baseline et un brouillon : la première Note
+On ou le premier CC capturé est consommé avant rappel/routage, les conflits exacts exigent
+un remplacement explicite, et seul Save installe le mapping. Cancel ne modifie ni la
+session ni les presets existants.
 
 La session de travail et une banque interne de 128 presets sont persistées avec migration
 de schéma. Program Change rappelle le slot zéro-based correspondant sur le canal d'entrée
@@ -133,8 +160,10 @@ module de référence. Les écarts et preuves sont suivis dans
 
 ## Vérification livrée
 
-Les validations reproductibles sont décrites dans `docs/VERIFICATION_REPORT.md`. Le gate
-JVM final réussit **94 tests domaine et 140 tests application, soit 234/234**. Les suites
+Les validations reproductibles sont décrites dans `docs/VERIFICATION_REPORT.md`. Le
+dernier gate chiffré ci-dessous est celui du MVP, antérieur au lot V2 ; aucun nouveau
+total V2 n'est revendiqué ici avant la revalidation complète. Ce gate MVP réussit
+**94 tests domaine et 140 tests application, soit 234/234**. Les suites
 déterministes couvrent Tone Row/transport, le coordinateur et son acteur hors Main, les
 articulations/strums, le byte stream MIDI, le contrat `SynthPatch`, la persistance et ses
 migrations, les projections UI et le moteur C++/JNI. Une
@@ -156,9 +185,9 @@ licence, identité commerciale, signature et publication sont hors de cette clô
 ## Dépôt et CI
 
 Le workspace est initialisé comme dépôt Git local sur la branche `main`, avec le Wrapper
-Gradle officiel 8.13 vérifié. Aucun remote ni publication n'a été configuré et aucun état
-distant n'est revendiqué. `docs/REPOSITORY_SETUP.md` décrit l'ajout ultérieur d'un remote
-et les protections de branche. Une CI GitHub Actions et une configuration Dependabot sont
+Gradle officiel 8.13 vérifié, et un remote `origin` est configuré. La documentation ne
+déduit aucun état distant de cette seule configuration. `docs/REPOSITORY_SETUP.md` décrit
+les protections de branche. Une CI GitHub Actions et une configuration Dependabot sont
 fournies sans secret ni action de publication.
 
 ## Nom, marques et publication

@@ -6,7 +6,8 @@ case "$STAGE" in
     1) PROMPT="$ROOT/codex/prompts/01_midi_core.md" ;;
     2) PROMPT="$ROOT/codex/prompts/02_tone_row_transport.md" ;;
     3) PROMPT="$ROOT/codex/prompts/03_audio_ui_hardening.md" ;;
-    *) echo "Usage: $0 <1|2|3>" >&2; exit 2 ;;
+    4) PROMPT="$ROOT/codex/prompts/04_v2_performance_midi_learn.md" ;;
+    *) echo "Usage: $0 <1|2|3|4>" >&2; exit 2 ;;
 esac
 if ! command -v codex >/dev/null 2>&1; then
     echo "Codex CLI absent. Installer/authentifier Codex ou utiliser l’extension VS Code." >&2

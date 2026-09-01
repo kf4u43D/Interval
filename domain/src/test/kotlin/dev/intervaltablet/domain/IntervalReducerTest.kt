@@ -31,6 +31,18 @@ class IntervalReducerTest {
             InstrumentAction.PressPadAbsolute(source, 60, 0)
         }
         assertThrows(IllegalArgumentException::class.java) {
+            InstrumentAction.PressSameInterval(source, 0)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            InstrumentAction.PressSamePitch(source, 128)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            InstrumentAction.PressRandomInterval(source, 0)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            InstrumentAction.HoldChromaticShift(source, 13)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
             InstrumentAction.StrumTone(source, voiceIndex = 0, velocity = 0)
         }
         assertThrows(IllegalArgumentException::class.java) {
@@ -71,6 +83,299 @@ class IntervalReducerTest {
         assertEquals(62, transition.state.currentNote)
         assertEquals(listOf(62), noteOns(transition).map { it.note })
         assertEquals(listOf(12L), noteOns(transition).map { it.timestampNanos })
+    }
+
+    @Test
+    fun sameIntervalRepeatsScaleStepsWhileSamePitchRepeatsTheAudibleRatio() {
+        var intervalState = reducer.initialState()
+        intervalState = reducer.reduce(
+            intervalState,
+            InstrumentAction.PressInterval(source, 3, 100, 1L),
+        ).state
+        val sameInterval = reducer.reduce(
+            intervalState,
+            InstrumentAction.PressSameInterval(source, 101, 2L),
+        )
+
+        assertEquals(71, sameInterval.state.currentNote)
+        assertEquals(3, sameInterval.state.lastIntervalSteps)
+        assertEquals(listOf(71), noteOns(sameInterval).map { it.note })
+
+        var pitchState = reducer.initialState()
+        pitchState = reducer.reduce(
+            pitchState,
+            InstrumentAction.PressInterval(source, 1, 90, 3L),
+        ).state
+        pitchState = reducer.reduce(
+            pitchState,
+            InstrumentAction.PressInterval(source, 1, 91, 4L),
+        ).state
+        assertEquals(2, pitchState.lastPitchDeltaSemitones)
+
+        val samePitch = reducer.reduce(
+            pitchState,
+            InstrumentAction.PressSamePitch(source, 92, 5L),
+        )
+        assertEquals(66, samePitch.state.currentNote)
+        assertEquals(listOf(66), noteOns(samePitch).map { it.note })
+        assertEquals(2, samePitch.state.lastPitchDeltaSemitones)
+
+        val released = reducer.reduce(
+            samePitch.state,
+            InstrumentAction.Release(source, timestampNanos = 6L),
+        )
+        assertEquals(listOf(66), noteOffs(released).map { it.note })
+    }
+
+    @Test
+    fun samePitchWithAStableHeldChromaticShiftPreservesTheAudibleRatio() {
+        val shiftSource = TriggerSource.Touch(8)
+        val noteSource = TriggerSource.Touch(9)
+        var state = reducer.initialState()
+        state = reducer.reduce(
+            state,
+            InstrumentAction.HoldChromaticShift(shiftSource, 1, 1L),
+        ).state
+
+        val first = reducer.reduce(
+            state,
+            InstrumentAction.PressInterval(noteSource, 1, 90, 2L),
+        )
+        assertEquals(listOf(63), noteOns(first).map { it.note })
+        state = reducer.reduce(
+            first.state,
+            InstrumentAction.Release(noteSource, timestampNanos = 3L),
+        ).state
+
+        val second = reducer.reduce(
+            state,
+            InstrumentAction.PressInterval(noteSource, 1, 91, 4L),
+        )
+        assertEquals(listOf(65), noteOns(second).map { it.note })
+        assertEquals(2, second.state.lastPitchDeltaSemitones)
+        state = reducer.reduce(
+            second.state,
+            InstrumentAction.Release(noteSource, timestampNanos = 5L),
+        ).state
+
+        val samePitch = reducer.reduce(
+            state,
+            InstrumentAction.PressSamePitch(noteSource, 92, 6L),
+        )
+        assertEquals(66, samePitch.state.currentNote)
+        assertEquals(listOf(67), noteOns(samePitch).map { it.note })
+        assertEquals(67, samePitch.state.lastSoundedLeadNote)
+        assertEquals(2, samePitch.state.lastPitchDeltaSemitones)
+
+        val released = reducer.reduce(
+            samePitch.state,
+            InstrumentAction.Release(noteSource, timestampNanos = 7L),
+        )
+        assertEquals(listOf(67), noteOffs(released).map { it.note })
+        assertEquals(1, released.state.activeChromaticShiftSemitones)
+    }
+
+    @Test
+    fun samePitchComposesAChromaticShiftAddedAfterTheRecordedRatio() {
+        val noteSource = TriggerSource.Touch(10)
+        val shiftSource = TriggerSource.Touch(11)
+        var state = reducer.initialState()
+
+        val first = reducer.reduce(
+            state,
+            InstrumentAction.PressInterval(noteSource, 1, 90, 8L),
+        )
+        assertEquals(listOf(62), noteOns(first).map { it.note })
+        state = reducer.reduce(
+            first.state,
+            InstrumentAction.Release(noteSource, timestampNanos = 9L),
+        ).state
+        val second = reducer.reduce(
+            state,
+            InstrumentAction.PressInterval(noteSource, 1, 91, 10L),
+        )
+        assertEquals(listOf(64), noteOns(second).map { it.note })
+        assertEquals(2, second.state.lastPitchDeltaSemitones)
+        state = reducer.reduce(
+            second.state,
+            InstrumentAction.Release(noteSource, timestampNanos = 11L),
+        ).state
+        state = reducer.reduce(
+            state,
+            InstrumentAction.HoldChromaticShift(shiftSource, 1, 12L),
+        ).state
+
+        val samePitch = reducer.reduce(
+            state,
+            InstrumentAction.PressSamePitch(noteSource, 92, 13L),
+        )
+        assertEquals(66, samePitch.state.currentNote)
+        assertEquals(listOf(67), noteOns(samePitch).map { it.note })
+    }
+
+    @Test
+    fun samePitchUsesTheBaseTargetAfterTheRecordedShiftIsReleased() {
+        val shiftSource = TriggerSource.Touch(12)
+        val noteSource = TriggerSource.Touch(13)
+        var state = reducer.initialState()
+        state = reducer.reduce(
+            state,
+            InstrumentAction.HoldChromaticShift(shiftSource, 1, 14L),
+        ).state
+
+        val first = reducer.reduce(
+            state,
+            InstrumentAction.PressInterval(noteSource, 1, 90, 15L),
+        )
+        assertEquals(listOf(63), noteOns(first).map { it.note })
+        state = reducer.reduce(
+            first.state,
+            InstrumentAction.Release(noteSource, timestampNanos = 16L),
+        ).state
+        val second = reducer.reduce(
+            state,
+            InstrumentAction.PressInterval(noteSource, 1, 91, 17L),
+        )
+        assertEquals(listOf(65), noteOns(second).map { it.note })
+        assertEquals(2, second.state.lastPitchDeltaSemitones)
+        state = reducer.reduce(
+            second.state,
+            InstrumentAction.Release(noteSource, timestampNanos = 18L),
+        ).state
+        state = reducer.reduce(
+            state,
+            InstrumentAction.Release(shiftSource, timestampNanos = 19L),
+        ).state
+        assertEquals(0, state.activeChromaticShiftSemitones)
+
+        val samePitch = reducer.reduce(
+            state,
+            InstrumentAction.PressSamePitch(noteSource, 92, 20L),
+        )
+        assertEquals(66, samePitch.state.currentNote)
+        assertEquals(listOf(66), noteOns(samePitch).map { it.note })
+    }
+
+    @Test
+    fun randomIntervalIsImmediateDeterministicBoundedAndBecomesTheSameInterval() {
+        val config = InstrumentConfig(
+            scale = ScaleLibrary.chromatic,
+            range = MidiNoteRange(0, 127),
+            solfegeWrap = false,
+        )
+        val initial = reducer.initialState(config).copy(randomState = 1234L)
+        val action = InstrumentAction.PressRandomInterval(source, 88, 10L)
+        val first = reducer.reduce(initial, action)
+        val replay = reducer.reduce(initial, action)
+
+        assertEquals(first.state, replay.state)
+        assertEquals(first.events, replay.events)
+        assertTrue(first.state.randomState != initial.randomState)
+        assertTrue(first.state.lastIntervalSteps in MIN_INTERVAL_STEPS..MAX_INTERVAL_STEPS)
+        assertEquals(1, noteOns(first).size)
+
+        fun randomSeries(seed: Long): List<Int> {
+            var state = reducer.initialState(config).copy(randomState = seed)
+            return List(12) { index ->
+                val transition = reducer.reduce(
+                    state,
+                    InstrumentAction.PressRandomInterval(
+                        source,
+                        velocity = 88,
+                        timestampNanos = 20L + index,
+                    ),
+                )
+                state = transition.state
+                transition.state.lastIntervalSteps
+            }
+        }
+
+        val seededSeries = randomSeries(1234L)
+        assertEquals(seededSeries, randomSeries(1234L))
+        assertTrue(seededSeries != randomSeries(1235L))
+        assertTrue(seededSeries.all { it in MIN_INTERVAL_STEPS..MAX_INTERVAL_STEPS })
+
+        val expected = first.state.config.grid().move(
+            first.state.currentNote,
+            first.state.lastIntervalSteps,
+        )
+        val same = reducer.reduce(
+            first.state,
+            InstrumentAction.PressSameInterval(source, 89, 11L),
+        )
+        assertEquals(expected, same.state.currentNote)
+        assertEquals(1, noteOns(same).size)
+    }
+
+    @Test
+    fun chromaticShiftsAreSilentStackPerSourceAndOnlyAffectNewNotes() {
+        val firstShift = TriggerSource.Touch(101)
+        val secondShift = TriggerSource.Touch(102)
+        val firstNote = TriggerSource.Touch(103)
+        val secondNote = TriggerSource.Touch(104)
+        var state = reducer.initialState()
+
+        val heldFirst = reducer.reduce(
+            state,
+            InstrumentAction.HoldChromaticShift(firstShift, 1, 1L),
+        )
+        assertTrue(heldFirst.events.isEmpty())
+        state = reducer.reduce(
+            heldFirst.state,
+            InstrumentAction.HoldChromaticShift(secondShift, 2, 2L),
+        ).state
+        assertEquals(3, state.activeChromaticShiftSemitones)
+
+        val shifted = reducer.reduce(
+            state,
+            InstrumentAction.PressInterval(firstNote, 0, 100, 3L),
+        )
+        assertEquals(60, shifted.state.currentNote)
+        assertEquals(listOf(63), noteOns(shifted).map { it.note })
+
+        val releasedFirstShift = reducer.reduce(
+            shifted.state,
+            InstrumentAction.Release(firstShift, timestampNanos = 4L),
+        )
+        assertTrue(releasedFirstShift.events.isEmpty())
+        assertEquals(2, releasedFirstShift.state.activeChromaticShiftSemitones)
+        assertEquals(listOf(63), releasedFirstShift.state.activeBySource.getValue(firstNote).map { it.note })
+
+        val shiftedAgain = reducer.reduce(
+            releasedFirstShift.state,
+            InstrumentAction.PressInterval(secondNote, 0, 90, 5L),
+        )
+        assertEquals(listOf(62), noteOns(shiftedAgain).map { it.note })
+        val releasedOriginal = reducer.reduce(
+            shiftedAgain.state,
+            InstrumentAction.Release(firstNote, timestampNanos = 6L),
+        )
+        assertEquals(listOf(63), noteOffs(releasedOriginal).map { it.note })
+
+        state = reducer.reduce(
+            releasedOriginal.state,
+            InstrumentAction.Release(secondShift, timestampNanos = 7L),
+        ).state
+        val unshifted = reducer.reduce(
+            state,
+            InstrumentAction.PressInterval(TriggerSource.Touch(105), 0, 80, 8L),
+        )
+        assertEquals(listOf(60), noteOns(unshifted).map { it.note })
+    }
+
+    @Test
+    fun panicClearsMomentaryShiftsAndReleasesShiftedVoices() {
+        val shift = TriggerSource.Touch(111)
+        val note = TriggerSource.Touch(112)
+        var state = reducer.initialState()
+        state = reducer.reduce(state, InstrumentAction.HoldChromaticShift(shift, 1)).state
+        state = reducer.reduce(state, InstrumentAction.PressInterval(note, 0, 80)).state
+
+        val panic = reducer.reduce(state, InstrumentAction.Panic(99L))
+
+        assertTrue(panic.state.chromaticShiftBySource.isEmpty())
+        assertEquals(0, panic.state.activeInstanceCount)
+        assertEquals(listOf(61), noteOffs(panic).map { it.note })
     }
 
     @Test
@@ -127,6 +432,28 @@ class IntervalReducerTest {
         assertEquals(listOf(64), noteOns(transition).map { it.note })
         assertFalse(noteOns(transition).any { it.note == 62 })
         assertEquals(listOf(55L, 55L), midiMessages(transition).map { it.timestampNanos })
+    }
+
+    @Test
+    fun sameIntervalRepeatsTheLastUndoThenMoveDisplacement() {
+        val moved = reducer.reduce(
+            reducer.initialState(),
+            InstrumentAction.UndoThenMove(source, -3, 90, timestampNanos = 56L),
+        )
+        assertEquals(55, moved.state.currentNote)
+        assertEquals(-3, moved.state.lastIntervalSteps)
+        val released = reducer.reduce(
+            moved.state,
+            InstrumentAction.Release(source, timestampNanos = 57L),
+        )
+
+        val same = reducer.reduce(
+            released.state,
+            InstrumentAction.PressSameInterval(source, 91, timestampNanos = 58L),
+        )
+        assertEquals(50, same.state.currentNote)
+        assertEquals(listOf(50), noteOns(same).map { it.note })
+        assertEquals(-3, same.state.lastIntervalSteps)
     }
 
     @Test
@@ -281,6 +608,43 @@ class IntervalReducerTest {
         state = reducer.reduce(state, InstrumentAction.AnchorExternal(61)).state
         state = reducer.reduce(state, InstrumentAction.PressInterval(source, -1, 64)).state
         assertEquals(60, state.currentNote)
+    }
+
+    @Test
+    fun externalAnchorBecomesTheAudibleReferenceForTheNextSamePitchDelta() {
+        var state = reducer.initialState()
+        state = reducer.reduce(
+            state,
+            InstrumentAction.PressInterval(source, 2, 90, 1L),
+        ).state
+        state = reducer.reduce(
+            state,
+            InstrumentAction.Release(source, timestampNanos = 2L),
+        ).state
+        assertEquals(64, state.lastSoundedLeadNote)
+
+        state = reducer.reduce(state, InstrumentAction.AnchorExternal(67)).state
+        assertEquals(67, state.lastExternalNote)
+        assertEquals(67, state.lastSoundedLeadNote)
+
+        val moved = reducer.reduce(
+            state,
+            InstrumentAction.PressInterval(source, 1, 91, 3L),
+        )
+        assertEquals(69, moved.state.currentNote)
+        assertEquals(2, moved.state.lastPitchDeltaSemitones)
+        state = reducer.reduce(
+            moved.state,
+            InstrumentAction.Release(source, timestampNanos = 4L),
+        ).state
+
+        val samePitch = reducer.reduce(
+            state,
+            InstrumentAction.PressSamePitch(source, 92, 5L),
+        )
+        assertEquals(71, samePitch.state.currentNote)
+        assertEquals(listOf(71), noteOns(samePitch).map { it.note })
+        assertEquals(2, samePitch.state.lastPitchDeltaSemitones)
     }
 
     @Test

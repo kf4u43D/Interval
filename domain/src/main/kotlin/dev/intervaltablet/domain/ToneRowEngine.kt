@@ -18,7 +18,16 @@ enum class ToneRowMode {
     PAUSED,
 }
 
-enum class ToneRowPlayMode { PRIME, RETRO, RANDOM, PENDULUM }
+enum class ToneRowPlayMode {
+    PRIME,
+    RETRO,
+    RANDOM,
+    PENDULUM,
+    AUTO_TRANSPOSE_UP,
+    AUTO_TRANSPOSE_DOWN,
+    AUTO_TRANSLATE_UP,
+    AUTO_TRANSLATE_DOWN,
+}
 
 /**
  * One immutable Tone Row element.
@@ -67,6 +76,10 @@ data class ToneRowState(
     val referenceScaleId: String = ScaleLibrary.major.id,
     val playOnce: Boolean = false,
     val notesRemainingInPass: Int = 0,
+    /** Logical Auto Play notes already emitted in the current row-length cycle. */
+    val notesPlayedInCycle: Int = 0,
+    /** Last manual row-index movement, retained only for Same Interval playback. */
+    val lastManualSteps: Int = 0,
 ) {
     init {
         require(entries.size <= MAX_TONE_ROW_SIZE)
@@ -92,6 +105,9 @@ data class ToneRowState(
         require(!playOnce || mode == ToneRowMode.AUTO_PLAYING || mode == ToneRowMode.PAUSED)
         require(!playOnce || notesRemainingInPass > 0)
         require(mode !in setOf(ToneRowMode.AUTO_PLAYING, ToneRowMode.PAUSED) || entries.isNotEmpty())
+        require(notesPlayedInCycle >= 0)
+        require(if (entries.isEmpty()) notesPlayedInCycle == 0 else notesPlayedInCycle < entries.size)
+        require(lastManualSteps in MIN_INTERVAL_STEPS..MAX_INTERVAL_STEPS)
         require(currentRecordNote == null || currentRecordNote in 0..127)
         require(mode != ToneRowMode.RECORDING || recordingCapacity > 0)
         require(mode != ToneRowMode.RECORDING || currentRecordNote != null)
@@ -116,6 +132,9 @@ sealed interface ToneRowAction {
     /** Early recording completion; equivalent to Play while recording. */
     data object FinishRecording : ToneRowAction
 
+    /** Abandons the in-progress take instead of retaining its partial entries. */
+    data object CancelRecording : ToneRowAction
+
     /** Stops while retaining both row contents and the current row position. */
     data object Stop : ToneRowAction
 
@@ -130,9 +149,19 @@ sealed interface ToneRowAction {
 
     data object PauseToggle : ToneRowAction
 
-    data class ManualMove(val steps: Int) : ToneRowAction {
+    data class ManualMove(
+        val steps: Int,
+        val velocityOverride: Int? = null,
+    ) : ToneRowAction {
         init {
             require(steps in MIN_INTERVAL_STEPS..MAX_INTERVAL_STEPS)
+            require(velocityOverride == null || velocityOverride in 1..127)
+        }
+    }
+
+    data class RepeatLastManualMove(val velocityOverride: Int? = null) : ToneRowAction {
+        init {
+            require(velocityOverride == null || velocityOverride in 1..127)
         }
     }
 
@@ -210,12 +239,18 @@ class ToneRowReducer(private val grid: PitchGrid) {
             is ToneRowAction.StartRecording -> startRecording(state, action.anchorNote)
             is ToneRowAction.RecordMove -> recordMove(state, action)
             ToneRowAction.FinishRecording -> finishRecording(state)
+            ToneRowAction.CancelRecording -> cancelRecording(state)
             ToneRowAction.Stop -> stop(state)
             ToneRowAction.Play -> playManual(state)
             is ToneRowAction.StartAuto -> startAuto(state, restart = action.restart, playOnce = false)
             ToneRowAction.PlayOnce -> startAuto(state, restart = true, playOnce = true)
             ToneRowAction.PauseToggle -> pauseToggle(state)
-            is ToneRowAction.ManualMove -> manualMove(state, action.steps)
+            is ToneRowAction.ManualMove -> manualMove(state, action.steps, action.velocityOverride)
+            is ToneRowAction.RepeatLastManualMove -> manualMove(
+                state,
+                state.lastManualSteps,
+                action.velocityOverride,
+            )
             ToneRowAction.Restart -> restart(state)
             ToneRowAction.Tick -> tick(state)
             is ToneRowAction.SetPlayMode -> setPlayMode(state, action.mode)
@@ -252,6 +287,8 @@ class ToneRowReducer(private val grid: PitchGrid) {
                 referenceScaleId = grid.scale.id,
                 playOnce = false,
                 notesRemainingInPass = 0,
+                notesPlayedInCycle = 0,
+                lastManualSteps = 0,
             ),
         )
     }
@@ -285,6 +322,8 @@ class ToneRowReducer(private val grid: PitchGrid) {
                 rowIndex = 0,
                 playOnce = false,
                 notesRemainingInPass = 0,
+                notesPlayedInCycle = 0,
+                lastManualSteps = 0,
             ),
             events = listOf(ToneRowEvent.PlayNote(candidate, entry.velocity)),
         )
@@ -317,6 +356,8 @@ class ToneRowReducer(private val grid: PitchGrid) {
                     mode = ToneRowMode.IDLE,
                     currentRecordNote = null,
                     recordingCapacity = 0,
+                    notesPlayedInCycle = 0,
+                    lastManualSteps = 0,
                 ),
             )
         } else {
@@ -327,9 +368,29 @@ class ToneRowReducer(private val grid: PitchGrid) {
                     rowIndex = 0,
                     playOnce = false,
                     notesRemainingInPass = 0,
+                    notesPlayedInCycle = 0,
+                    lastManualSteps = 0,
                 ),
             )
         }
+    }
+
+    private fun cancelRecording(state: ToneRowState): ToneRowTransition {
+        if (state.mode != ToneRowMode.RECORDING) return ToneRowTransition(state)
+        return ToneRowTransition(
+            state.copy(
+                mode = ToneRowMode.IDLE,
+                entries = emptyList(),
+                currentRecordNote = null,
+                rowIndex = 0,
+                sequenceIndex = 0,
+                recordingCapacity = 0,
+                playOnce = false,
+                notesRemainingInPass = 0,
+                notesPlayedInCycle = 0,
+                lastManualSteps = 0,
+            ),
+        )
     }
 
     private fun stop(state: ToneRowState): ToneRowTransition {
@@ -341,6 +402,8 @@ class ToneRowReducer(private val grid: PitchGrid) {
                 recordingCapacity = if (cancelledEmptyRecording) 0 else state.recordingCapacity,
                 playOnce = false,
                 notesRemainingInPass = 0,
+                notesPlayedInCycle = 0,
+                lastManualSteps = 0,
             ),
         )
     }
@@ -355,6 +418,8 @@ class ToneRowReducer(private val grid: PitchGrid) {
             pendulumDirection = 1,
             playOnce = false,
             notesRemainingInPass = 0,
+            notesPlayedInCycle = 0,
+            lastManualSteps = 0,
         )
         return emitCurrent(next)
     }
@@ -368,30 +433,27 @@ class ToneRowReducer(private val grid: PitchGrid) {
             pendulumDirection = if (restart) 1 else initial.pendulumDirection,
             playOnce = playOnce,
             notesRemainingInPass = if (playOnce) initial.entries.size else 0,
+            notesPlayedInCycle = if (restart) 0 else initial.notesPlayedInCycle,
+            lastManualSteps = if (restart) 0 else initial.lastManualSteps,
         )
-        val emitted = emitCurrent(playing)
-        return consumePlayOnceEmission(emitted)
+        return finishAutoEmission(emitCurrent(playing))
     }
 
     private fun startPosition(state: ToneRowState): ToneRowState {
         return when (state.playMode) {
             ToneRowPlayMode.PRIME,
             ToneRowPlayMode.PENDULUM,
+            ToneRowPlayMode.AUTO_TRANSPOSE_UP,
+            ToneRowPlayMode.AUTO_TRANSPOSE_DOWN,
+            ToneRowPlayMode.AUTO_TRANSLATE_UP,
+            ToneRowPlayMode.AUTO_TRANSLATE_DOWN,
             -> state.copy(rowIndex = 0, sequenceIndex = 0, pendulumDirection = 1)
             ToneRowPlayMode.RETRO -> state.copy(
                 rowIndex = state.entries.lastIndex,
                 sequenceIndex = 0,
                 pendulumDirection = -1,
             )
-            ToneRowPlayMode.RANDOM -> {
-                val random = nextRandom(state.randomState)
-                state.copy(
-                    rowIndex = randomIndex(random, state.entries.size),
-                    sequenceIndex = 0,
-                    pendulumDirection = 1,
-                    randomState = random,
-                )
-            }
+            ToneRowPlayMode.RANDOM -> state.copy(rowIndex = 0, sequenceIndex = 0, pendulumDirection = 1)
         }
     }
 
@@ -406,17 +468,40 @@ class ToneRowReducer(private val grid: PitchGrid) {
         }
     }
 
-    private fun manualMove(state: ToneRowState, steps: Int): ToneRowTransition {
-        if (state.mode != ToneRowMode.MANUAL_PLAYBACK || state.entries.isEmpty()) {
+    private fun manualMove(
+        state: ToneRowState,
+        steps: Int,
+        velocityOverride: Int?,
+    ): ToneRowTransition {
+        if (
+            state.mode !in setOf(ToneRowMode.MANUAL_PLAYBACK, ToneRowMode.PAUSED) ||
+            state.entries.isEmpty()
+        ) {
             return ToneRowTransition(state)
         }
         val nextIndex = floorMod(state.rowIndex + steps, state.entries.size)
-        return emitCurrent(state.copy(rowIndex = nextIndex))
+        return emitCurrent(
+            state.copy(rowIndex = nextIndex, lastManualSteps = steps),
+            velocityOverride = velocityOverride,
+        )
     }
 
     private fun restart(state: ToneRowState): ToneRowTransition {
         if (state.entries.isEmpty() || state.mode == ToneRowMode.RECORDING) return ToneRowTransition(state)
-        val positioned = startPosition(state)
+        val resetAutomaticTransformation = when (state.playMode) {
+            ToneRowPlayMode.AUTO_TRANSPOSE_UP,
+            ToneRowPlayMode.AUTO_TRANSPOSE_DOWN,
+            -> state.copy(transpositionSemitones = 0)
+            ToneRowPlayMode.AUTO_TRANSLATE_UP,
+            ToneRowPlayMode.AUTO_TRANSLATE_DOWN,
+            -> state.copy(translation = 0)
+            ToneRowPlayMode.PRIME,
+            ToneRowPlayMode.RETRO,
+            ToneRowPlayMode.RANDOM,
+            ToneRowPlayMode.PENDULUM,
+            -> state
+        }
+        val positioned = startPosition(resetAutomaticTransformation)
         val next = positioned.copy(
             mode = when (state.mode) {
                 ToneRowMode.IDLE -> ToneRowMode.MANUAL_PLAYBACK
@@ -427,9 +512,10 @@ class ToneRowReducer(private val grid: PitchGrid) {
                 -> state.mode
             },
             notesRemainingInPass = if (state.playOnce) state.entries.size else 0,
+            notesPlayedInCycle = 0,
+            lastManualSteps = 0,
         )
-        val emitted = emitCurrent(next)
-        return consumePlayOnceEmission(emitted)
+        return finishAutoEmission(emitCurrent(next))
     }
 
     private fun tick(state: ToneRowState): ToneRowTransition {
@@ -437,7 +523,12 @@ class ToneRowReducer(private val grid: PitchGrid) {
         val sequenceStep = state.intervalSequence[state.sequenceIndex]
         val nextSequenceIndex = floorMod(state.sequenceIndex + 1, state.intervalSequence.size)
         val moved = when (state.playMode) {
-            ToneRowPlayMode.PRIME -> state.copy(
+            ToneRowPlayMode.PRIME,
+            ToneRowPlayMode.AUTO_TRANSPOSE_UP,
+            ToneRowPlayMode.AUTO_TRANSPOSE_DOWN,
+            ToneRowPlayMode.AUTO_TRANSLATE_UP,
+            ToneRowPlayMode.AUTO_TRANSLATE_DOWN,
+            -> state.copy(
                 rowIndex = floorMod(state.rowIndex + sequenceStep, state.entries.size),
                 sequenceIndex = nextSequenceIndex,
             )
@@ -447,15 +538,16 @@ class ToneRowReducer(private val grid: PitchGrid) {
             )
             ToneRowPlayMode.RANDOM -> {
                 val random = nextRandom(state.randomState)
+                val randomizedStep = randomizeMovement(sequenceStep, random)
                 state.copy(
-                    rowIndex = randomIndex(random, state.entries.size),
+                    rowIndex = floorMod(state.rowIndex + randomizedStep, state.entries.size),
                     sequenceIndex = nextSequenceIndex,
                     randomState = random,
                 )
             }
             ToneRowPlayMode.PENDULUM -> pendulumMove(state, sequenceStep, nextSequenceIndex)
         }
-        return consumePlayOnceEmission(emitCurrent(moved))
+        return finishAutoEmission(emitCurrent(moved))
     }
 
     private fun pendulumMove(state: ToneRowState, step: Int, nextSequenceIndex: Int): ToneRowState {
@@ -487,9 +579,19 @@ class ToneRowReducer(private val grid: PitchGrid) {
             ToneRowPlayMode.PRIME,
             ToneRowPlayMode.RANDOM,
             ToneRowPlayMode.PENDULUM,
+            ToneRowPlayMode.AUTO_TRANSPOSE_UP,
+            ToneRowPlayMode.AUTO_TRANSPOSE_DOWN,
+            ToneRowPlayMode.AUTO_TRANSLATE_UP,
+            ToneRowPlayMode.AUTO_TRANSLATE_DOWN,
             -> 1
         }
-        return ToneRowTransition(state.copy(playMode = mode, pendulumDirection = direction))
+        return ToneRowTransition(
+            state.copy(
+                playMode = mode,
+                pendulumDirection = direction,
+                notesPlayedInCycle = 0,
+            ),
+        )
     }
 
     private fun setIntervalSequence(state: ToneRowState, steps: List<Int>): ToneRowTransition {
@@ -532,11 +634,13 @@ class ToneRowReducer(private val grid: PitchGrid) {
                 translation = 0,
                 octaveOffset = 0,
                 pendulumDirection = 1,
+                notesPlayedInCycle = 0,
+                lastManualSteps = 0,
             ),
         )
     }
 
-    private fun emitCurrent(state: ToneRowState): ToneRowTransition {
+    private fun emitCurrent(state: ToneRowState, velocityOverride: Int? = null): ToneRowTransition {
         val entry = state.entries[state.rowIndex]
         val pivot = state.entries.first().relativeDegree
         val contourDegree = if (state.inverted) {
@@ -550,7 +654,51 @@ class ToneRowReducer(private val grid: PitchGrid) {
             state.transpositionSemitones.toLong() +
             state.octaveOffset.toLong() * 12L
         val note = transformed.coerceIn(grid.range.min.toLong(), grid.range.max.toLong()).toInt()
-        return ToneRowTransition(state, listOf(ToneRowEvent.PlayNote(note, entry.velocity)))
+        return ToneRowTransition(
+            state,
+            listOf(ToneRowEvent.PlayNote(note, velocityOverride ?: entry.velocity)),
+        )
+    }
+
+    private fun finishAutoEmission(transition: ToneRowTransition): ToneRowTransition {
+        if (
+            transition.state.mode != ToneRowMode.AUTO_PLAYING ||
+            transition.events.none { it is ToneRowEvent.PlayNote }
+        ) {
+            return transition
+        }
+        val advanced = transition.copy(state = advanceAutoCycle(transition.state))
+        return consumePlayOnceEmission(advanced)
+    }
+
+    private fun advanceAutoCycle(state: ToneRowState): ToneRowState {
+        val nextCount = state.notesPlayedInCycle + 1
+        if (nextCount < state.entries.size) return state.copy(notesPlayedInCycle = nextCount)
+        return when (state.playMode) {
+            ToneRowPlayMode.AUTO_TRANSPOSE_UP -> state.copy(
+                transpositionSemitones = (state.transpositionSemitones + 1)
+                    .coerceAtMost(MAX_TONE_ROW_TRANSFORMATION),
+                notesPlayedInCycle = 0,
+            )
+            ToneRowPlayMode.AUTO_TRANSPOSE_DOWN -> state.copy(
+                transpositionSemitones = (state.transpositionSemitones - 1)
+                    .coerceAtLeast(MIN_TONE_ROW_TRANSFORMATION),
+                notesPlayedInCycle = 0,
+            )
+            ToneRowPlayMode.AUTO_TRANSLATE_UP -> state.copy(
+                translation = (state.translation + 1).coerceAtMost(MAX_TONE_ROW_TRANSFORMATION),
+                notesPlayedInCycle = 0,
+            )
+            ToneRowPlayMode.AUTO_TRANSLATE_DOWN -> state.copy(
+                translation = (state.translation - 1).coerceAtLeast(MIN_TONE_ROW_TRANSFORMATION),
+                notesPlayedInCycle = 0,
+            )
+            ToneRowPlayMode.PRIME,
+            ToneRowPlayMode.RETRO,
+            ToneRowPlayMode.RANDOM,
+            ToneRowPlayMode.PENDULUM,
+            -> state.copy(notesPlayedInCycle = 0)
+        }
     }
 
     private fun consumePlayOnceEmission(transition: ToneRowTransition): ToneRowTransition {
@@ -565,6 +713,7 @@ class ToneRowReducer(private val grid: PitchGrid) {
                     mode = ToneRowMode.MANUAL_PLAYBACK,
                     playOnce = false,
                     notesRemainingInPass = 0,
+                    notesPlayedInCycle = 0,
                 ),
                 events = transition.events + ToneRowEvent.FinishedPass,
             )
@@ -574,6 +723,11 @@ class ToneRowReducer(private val grid: PitchGrid) {
     private fun randomIndex(random: Long, size: Int): Int {
         val mixed = random xor (random ushr 33)
         return floorMod((mixed ushr 1).toInt(), size)
+    }
+
+    private fun randomizeMovement(requestedStep: Int, random: Long): Int {
+        val magnitude = randomIndex(random, abs(requestedStep) * 2 + 1)
+        return if (requestedStep < 0) -magnitude else magnitude
     }
 
     private fun nextRandom(value: Long): Long = value * 6364136223846793005L + 1442695040888963407L
