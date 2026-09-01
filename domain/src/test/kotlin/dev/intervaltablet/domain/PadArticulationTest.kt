@@ -26,6 +26,89 @@ class PadArticulationTest {
         assertEquals(listOf(101), transition.noteOns().map { it.velocity })
         assertEquals(listOf(60), transition.state.activeBySource.getValue(source).map { it.note })
         assertEquals(listOf(60, 57, 53), transition.state.strumNotes())
+        assertTrue(transition.state.hasStandaloneArpeggio(source))
+    }
+
+    @Test
+    fun heldArpeggioCyclesEveryChordVoiceAndReleaseClearsItsSession() {
+        val source = TriggerSource.Touch(101)
+        var state = reducer.initialState(InstrumentConfig(chord = ChordLibrary.triad))
+
+        val pressed = reducer.reduce(
+            state,
+            InstrumentAction.PressInterval(source, 0, 101, timestampNanos = 100L),
+        )
+        assertEquals(listOf(60), pressed.noteOns().map { it.note })
+        assertEquals(1, pressed.state.heldPadBySource.getValue(source).nextArpeggioVoiceIndex)
+
+        val second = reducer.reduce(
+            pressed.state,
+            InstrumentAction.AdvanceArpeggio(source, timestampNanos = 200L),
+        )
+        assertEquals(listOf(60), second.noteOffs().map { it.note })
+        assertEquals(listOf(57), second.noteOns().map { it.note })
+        assertEquals(listOf(50), second.noteOns().map { it.velocity })
+
+        val third = reducer.reduce(
+            second.state,
+            InstrumentAction.AdvanceArpeggio(source, timestampNanos = 300L),
+        )
+        assertEquals(listOf(57), third.noteOffs().map { it.note })
+        assertEquals(listOf(53), third.noteOns().map { it.note })
+
+        val wrapped = reducer.reduce(
+            third.state,
+            InstrumentAction.AdvanceArpeggio(source, timestampNanos = 400L),
+        )
+        assertEquals(listOf(53), wrapped.noteOffs().map { it.note })
+        assertEquals(listOf(60), wrapped.noteOns().map { it.note })
+        assertEquals(1, wrapped.state.activeInstanceCount)
+
+        val released = reducer.reduce(
+            wrapped.state,
+            InstrumentAction.Release(source, timestampNanos = 450L),
+        )
+        assertEquals(listOf(60), released.noteOffs().map { it.note })
+        assertTrue(released.state.activeBySource.isEmpty())
+        assertTrue(released.state.heldPadBySource.isEmpty())
+
+        val staleTick = reducer.reduce(
+            released.state,
+            InstrumentAction.AdvanceArpeggio(source, timestampNanos = 500L),
+        )
+        assertSame(released.state, staleTick.state)
+        assertTrue(staleTick.events.isEmpty())
+    }
+
+    @Test
+    fun chordChangeImmediatelyRevoicesHeldArpeggioAndRestartsItsVoiceOrder() {
+        val source = TriggerSource.Touch(102)
+        var state = reducer.initialState(InstrumentConfig(chord = ChordLibrary.triad))
+        state = reducer.reduce(
+            state,
+            InstrumentAction.PressInterval(source, 0, 100, timestampNanos = 10L),
+        ).state
+        state = reducer.reduce(
+            state,
+            InstrumentAction.AdvanceArpeggio(source, timestampNanos = 20L),
+        ).state
+        assertEquals(listOf(57), state.activeBySource.getValue(source).map { it.note })
+
+        val changed = reducer.reduce(
+            state,
+            InstrumentAction.SetChord(ChordLibrary.sixth, timestampNanos = 30L),
+        )
+        assertEquals(listOf(57), changed.noteOffs().map { it.note })
+        assertEquals(listOf(60), changed.noteOns().map { it.note })
+        assertEquals(1, changed.state.heldPadBySource.getValue(source).nextArpeggioVoiceIndex)
+        assertEquals(ChordLibrary.sixth, changed.state.config.chord)
+
+        val advanced = reducer.reduce(
+            changed.state,
+            InstrumentAction.AdvanceArpeggio(source, timestampNanos = 40L),
+        )
+        assertEquals(changed.state.strumNotes()[1], advanced.noteOns().single().note)
+        assertTrue(advanced.midiMessages().all { it.timestampNanos == 40L })
     }
 
     @Test

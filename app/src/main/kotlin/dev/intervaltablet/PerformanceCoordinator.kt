@@ -808,6 +808,7 @@ class PerformanceCoordinator(
             is InstrumentAction.StrumTone -> timestampNanos
             is InstrumentAction.UndoThenMove -> timestampNanos
             is InstrumentAction.Release -> timestampNanos
+            is InstrumentAction.AdvanceArpeggio -> timestampNanos
             is InstrumentAction.Undo -> timestampNanos
             is InstrumentAction.Home -> timestampNanos
             is InstrumentAction.AnchorExternal -> 0L

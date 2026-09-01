@@ -17,8 +17,8 @@ android {
         applicationId = "dev.intervaltablet"
         minSdk = 29
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.2.2-dev"
+        versionCode = 5
+        versionName = "0.2.3-dev"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true

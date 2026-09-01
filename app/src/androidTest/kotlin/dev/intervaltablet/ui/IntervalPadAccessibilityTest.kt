@@ -12,6 +12,7 @@ import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -101,6 +102,22 @@ class IntervalPadAccessibilityTest {
             composeRule.onNodeWithTag(chordChipTestTag(chord.id), useUnmergedTree = true)
                 .assertIsDisplayed()
                 .assertHasClickAction()
+        }
+        ScaleLibrary.all.forEach { scale ->
+            val scaleBounds = composeRule
+                .onNodeWithTag(scaleChipTestTag(scale.id), useUnmergedTree = true)
+                .assertIsDisplayed()
+                .assertHasClickAction()
+                .fetchSemanticsNode()
+                .boundsInRoot
+            assertTrue(
+                "Portrait scale ${scale.id} width=${scaleBounds.width}px, minimum=${minimumTargetPixels}px",
+                scaleBounds.width >= minimumTargetPixels - 1f,
+            )
+            assertTrue(
+                "Portrait scale ${scale.id} height=${scaleBounds.height}px, minimum=${minimumTargetPixels}px",
+                scaleBounds.height >= minimumTargetPixels - 1f,
+            )
         }
         PerformanceIntervalSteps.forEach { steps ->
             val padBounds = composeRule
@@ -205,11 +222,22 @@ class IntervalPadAccessibilityTest {
                 .assertIsDisplayed()
                 .assertHasClickAction()
         }
-        composeRule.onNodeWithTag(chordChipTestTag(ChordLibrary.triad.id), useUnmergedTree = true)
-            .performClick()
-        composeRule.onNodeWithTag(scaleChipTestTag(ScaleLibrary.major.id), useUnmergedTree = true)
+        val triadNode = composeRule
+            .onNodeWithTag(chordChipTestTag(ChordLibrary.triad.id), useUnmergedTree = true)
+        triadNode.performTouchInput { down(center) }
+        composeRule.runOnIdle {
+            assertEquals(ChordLibrary.triad, selectedChord)
+        }
+        triadNode.performTouchInput { up() }
+        ScaleLibrary.all.forEach { scale ->
+            composeRule.onNodeWithTag(scaleChipTestTag(scale.id), useUnmergedTree = true)
+                .assertIsDisplayed()
+                .assertHasClickAction()
+        }
+        composeRule.onNodeWithTag(scaleChipTestTag(ScaleLibrary.blues.id), useUnmergedTree = true)
             .assertIsDisplayed()
             .assertHasClickAction()
+            .performClick()
         composeRule.onNodeWithTag(ForceToScaleTestTag, useUnmergedTree = true)
             .assertIsDisplayed()
             .assertHasClickAction()
@@ -217,7 +245,7 @@ class IntervalPadAccessibilityTest {
         composeRule.runOnIdle {
             assertEquals(3, oneShotStep)
             assertEquals(ChordLibrary.triad, selectedChord)
-            assertEquals(ScaleLibrary.major, selectedScale)
+            assertEquals(ScaleLibrary.blues, selectedScale)
             assertTrue(forceToScale)
         }
     }

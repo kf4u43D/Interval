@@ -111,9 +111,9 @@ Ces tests instrumentés sont requis pour la réception matérielle. Ils ne sont 
   injectés : restauration arrêtée, autosauvegarde/rappel, callback interne tardif sans
   rafale, Program/Song Select avant routage, isolation PassThru et HostStop idempotent.
 - `PadArticulationTest`, `PerformanceCoordinatorTest` et
-  `IntervalTabletViewModelTest` couvrent le lead seul, le voicing plaqué, le pad muet,
-  les doublures, les changements de mode, le strummer one-shot à vélocité pleine et sa
-  release ciblée.
+  `IntervalTabletViewModelTest` couvrent le cycle autonome de toutes les voix, le voicing
+  plaqué, le pad muet, les doublures, le revoicing immédiat, les callbacks tardifs, le
+  transport arrêté, le strummer one-shot à vélocité pleine et les releases ciblées.
 - `StrummerGestureTrackerTest` couvre les bandes sautées dans les deux sens, les sources
   indépendantes, la vélocité secondaire et l'hystérésis de frontière.
 - `AudioParametersTest` fixe les 16 identifiants wire, leurs bornes/défauts, l'ordre du

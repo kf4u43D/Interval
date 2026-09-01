@@ -5,7 +5,7 @@
 ```text
 Compose UI ─────┐
 Android MIDI ───┼─> actor ViewModel ─> capture Learn? ─> app coordinator ─> reducers purs ─┬─> MIDI output
-Clock interne ──┘                         │                                              ├─> Native audio queue
+Clock/arpège ───┘                         │                                              ├─> Native audio queue
                                           └─> brouillon/commit mapping                    └─> release planifiée
 
 DataStore <──── session/preset bank serialization ────> actor ViewModel
@@ -22,7 +22,8 @@ Kotlin/JVM pur. Il contient :
 - gammes, grille de notes et note range ;
 - machine d’état d’instrument ;
 - accords et instances actives ;
-- articulation des pads et projection déterministe du voicing pour le strummer ;
+- articulation des pads, sessions maintenues par source, arpège déterministe et projection
+  du voicing pour le strummer ;
 - mapping/routage MIDI ;
 - reducer transactionnel de l'éditeur MIDI Learn, avec baseline, brouillon, candidat,
   conflits et événement de commit ;
@@ -46,7 +47,7 @@ Application Android :
 
 Le `ViewModel` sérialise les actions musicales sur une mailbox bornée de 256 commandes,
 consommée hors du thread UI par un dispatcher mono-thread injectable. Les callbacks publics
-déposent des intentions brutes ; vélocité, reducers, horloge, gates et one-shots sont résolus
+déposent des intentions brutes ; vélocité, reducers, horloge, arpèges, gates et one-shots sont résolus
 dans cet acteur. Le coordinateur compose ensuite `IntervalReducer`, `ToneRowReducer`,
 `TransportReducer` et `MidiRouter` en préservant un ordre total des effets.
 
@@ -116,7 +117,8 @@ Exécutable CMake hôte qui compile les primitives DSP sans Android ni Oboe. Il 
 3. Le coordinateur appelle le reducer concerné. Une action Tone Row automatique devient
    `InstrumentAction.PressAbsolute` et conserve le voicing historique ; un geste de pad
    en Record/Manual devient `PressPadAbsolute` et respecte l'articulation. Le strummer
-   utilise `StrumTone`. Voicing et ownership restent ainsi uniques dans le domaine.
+   utilise `StrumTone`. Un tick autonome devient `AdvanceArpeggio`. Voicing et ownership
+   restent ainsi uniques dans le domaine.
 4. Les reducers retournent de nouveaux états et des listes ordonnées d'événements.
 5. Les événements sont dispatchés immédiatement vers MIDI Out et/ou audio interne selon la
    configuration ; la persistance et la présentation ne précèdent jamais ce dispatch.
@@ -137,6 +139,10 @@ actif et une libération tardive d'une ancienne origine ne peut pas couper la vo
 - Horloge interne : un seul job attend la prochaine deadline injectée par le domaine ;
   il renvoie une commande horodatée dans la même mailbox et n'exécute aucune règle musicale.
   Un callback tardif produit un seul tick puis le reducer rebase l'échéance suivante.
+- Arpège autonome : un job borné par source attend la durée de pas du transport et remet
+  uniquement `AdvanceArpeggio` dans la mailbox. Le domaine décide si la source et le
+  voicing existent encore ; Release/Panic/reconfiguration annulent les jobs et rendent
+  tout callback tardif idempotent.
 - MIDI Clock : le reducer compte les pulses à 24 PPQ et mémorise la dernière période
   positive observée pour calculer le gate ; des timestamps identiques restent comptés
   mais ne remplacent pas cette estimation.
@@ -200,7 +206,9 @@ seuils actuels.
 `PerformanceScreen` adapte uniquement la composition visuelle. En portrait, un panneau
 gauche 43 % regroupe harmonie et strummer, tandis qu’un panneau droit 57 % regroupe les
 utilitaires et la grille d’intervalles. Le paysage conserve cette séparation latérale et
-utilise davantage de colonnes pour les accords. Aucune règle musicale n’est dupliquée :
+utilise davantage de colonnes pour les gammes et les accords. Les treize gammes et dix
+accords sont des cibles directes ; un composant Compose distinct sépare le touch-down de
+l'action sémantique sans double déclenchement. Aucune règle musicale n’est dupliquée :
 les deux panneaux consomment les mêmes projections et callbacks du ViewModel.
 
 Le ViewModel possède par défaut un `ExecutorCoroutineDispatcher` mono-thread nommé
@@ -212,7 +220,7 @@ les callbacks tactiles sans attendre l’état rendu suivant.
 
 La variante `performance` hérite de Release, active R8 et les bibliothèques natives
 optimisées, utilise une signature debug uniquement pour l’installation locale et ajoute
-le suffixe de package `.performance`. Elle est l’application de jeu V2.2 ; les variantes
+le suffixe de package `.performance`. Elle est l’application de jeu V2.3 ; les variantes
 Benchmark et Instrumented conservent leurs rôles de mesure et de test.
 
 ## Observabilité
@@ -250,5 +258,5 @@ attendent des actions typées ; Ratchet requiert plusieurs Note On futurs annula
 génération, ce que le job unique de release ne doit pas simuler. La génération MIDI
 Clock/transport et Song Position Pointer, le catalogue étendu d'actions mappables, les
 CC relatifs/continus, gammes personnalisées/scopes de presets et la certification soutenue à
-90 Hz restent hors de l'architecture V2.2. CV, réseau, Scala, microtonalité, MPE et MIDI 2.0 restent hors
+90 Hz restent hors de l'architecture V2.3. CV, réseau, Scala, microtonalité, MPE et MIDI 2.0 restent hors
 des étapes engagées.

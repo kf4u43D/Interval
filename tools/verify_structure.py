@@ -46,6 +46,10 @@ REQUIRED_FILES = {
     "codex/prompts/01_midi_core.md",
     "codex/prompts/02_tone_row_transport.md",
     "codex/prompts/03_audio_ui_hardening.md",
+    "codex/prompts/04_v2_performance_midi_learn.md",
+    "codex/prompts/05_v2_1_performance_surface.md",
+    "codex/prompts/06_v2_2_two_hand_low_latency.md",
+    "codex/prompts/07_v2_3_direct_harmony_arpeggio.md",
     "gradle/libs.versions.toml",
     "gradle/wrapper/gradle-wrapper.properties",
     "app/src/main/AndroidManifest.xml",
@@ -173,8 +177,8 @@ def main() -> int:
     state_path = ROOT / ".codex/state.json"
     if state_path.exists():
         state = json.loads(state_path.read_text(encoding="utf-8"))
-        if state.get("currentStage") not in {1, 2, 3, 4, 5, 6}:
-            errors.append(".codex/state.json: currentStage doit valoir 1, 2, 3, 4, 5 ou 6")
+        if state.get("currentStage") not in {1, 2, 3, 4, 5, 6, 7}:
+            errors.append(".codex/state.json: currentStage doit valoir 1, 2, 3, 4, 5, 6 ou 7")
         if state.get("status") not in {"not-started", "in-progress", "blocked", "complete"}:
             errors.append(".codex/state.json: status non reconnu")
 

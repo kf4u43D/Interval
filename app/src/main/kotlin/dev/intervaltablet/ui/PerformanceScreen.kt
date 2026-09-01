@@ -4,6 +4,9 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -84,6 +87,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
@@ -407,8 +411,9 @@ internal fun ProjectedPerformanceScreen(
                                 onSetForceToScale = onSetForceToScale,
                                 portraitTwoHanded = true,
                                 chordColumns = 5,
+                                scaleColumns = 5,
                                 modifier = Modifier
-                                    .width(if (compact) 268.dp else 360.dp)
+                                    .width(if (compact) 320.dp else 420.dp)
                                     .fillMaxHeight()
                                     .testTag(HarmonyHandPaneTestTag),
                             )
@@ -622,6 +627,7 @@ private fun ProjectedHarmonySurface(
     modifier: Modifier = Modifier,
     portraitTwoHanded: Boolean = false,
     chordColumns: Int = 2,
+    scaleColumns: Int = 3,
 ) {
     val controls = state.value
     HarmonySurface(
@@ -634,6 +640,7 @@ private fun ProjectedHarmonySurface(
         onSetForceToScale = onSetForceToScale,
         portraitTwoHanded = portraitTwoHanded,
         chordColumns = chordColumns,
+        scaleColumns = scaleColumns,
         modifier = modifier,
     )
 }
@@ -674,6 +681,7 @@ private fun TwoHandedPortraitStage(
                 onSetForceToScale = onSetForceToScale,
                 portraitTwoHanded = true,
                 chordColumns = 2,
+                scaleColumns = 3,
                 modifier = Modifier.weight(1f).fillMaxWidth(),
             )
             ProjectedStrummerLane(
@@ -1198,7 +1206,6 @@ private fun ArticulationSelector(
     onSelect: (PadArticulation) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val currentOnSelect = rememberUpdatedState(onSelect)
     Column(
         modifier = modifier.selectableGroup(),
         verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -1212,47 +1219,100 @@ private fun ArticulationSelector(
                     val isSelected = articulation == selected
                     val label = articulationLabel(articulation)
                     val description = articulationDescription(articulation)
-                    Box(
+                    ImmediateChoiceButton(
+                        selected = isSelected,
+                        enabled = true,
+                        label = label.uppercase(),
+                        description = description,
+                        onSelect = { onSelect(articulation) },
                         modifier = Modifier
                             .weight(1f)
-                            .heightIn(min = 48.dp)
-                            .background(
-                                color = if (isSelected) {
-                                    MaterialTheme.colorScheme.primaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceContainerHigh
-                                },
-                                shape = ControlShape,
-                            )
-                            .selectable(
-                                selected = isSelected,
-                                role = Role.RadioButton,
-                                onClick = { currentOnSelect.value(articulation) },
-                            )
-                            .semantics {
-                                contentDescription = description
-                                this.selected = isSelected
-                            }
-                            .testTag(articulationModeTestTag(articulation))
-                            .padding(horizontal = 3.dp, vertical = 3.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = label.uppercase(),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (isSelected) {
-                                MaterialTheme.colorScheme.onPrimaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                            fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
-                            textAlign = TextAlign.Center,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
+                            .testTag(articulationModeTestTag(articulation)),
+                    )
+                }
+                repeat(2 - articulations.size) {
+                    Spacer(Modifier.weight(1f))
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ImmediateChoiceButton(
+    selected: Boolean,
+    enabled: Boolean,
+    label: String,
+    description: String,
+    onSelect: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val currentOnSelect = rememberUpdatedState(onSelect)
+    var focused by remember { mutableStateOf(false) }
+    val background = when {
+        selected -> MaterialTheme.colorScheme.primaryContainer
+        focused -> MaterialTheme.colorScheme.secondaryContainer
+        else -> MaterialTheme.colorScheme.surfaceContainerHigh
+    }
+    val foreground = if (selected) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Surface(
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .semantics(mergeDescendants = true) {
+                role = Role.RadioButton
+                this.selected = selected
+                contentDescription = description
+                if (!enabled) disabled()
+                onClick(label = description) {
+                    if (enabled) currentOnSelect.value()
+                    enabled
+                }
+            }
+            .onKeyEvent { event ->
+                val activationKey = event.key == Key.Enter || event.key == Key.Spacebar
+                if (!enabled || !activationKey) {
+                    false
+                } else {
+                    if (event.type == KeyEventType.KeyDown) currentOnSelect.value()
+                    true
+                }
+            }
+            .onFocusChanged { focused = it.isFocused }
+            .focusable(enabled)
+            .pointerInput(enabled) {
+                if (enabled) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        currentOnSelect.value()
+                        down.consume()
+                        waitForUpOrCancellation()
+                    }
+                }
+            },
+        shape = ControlShape,
+        color = background,
+        border = BorderStroke(
+            width = if (selected) 2.dp else 1.dp,
+            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+        ),
+    ) {
+        Box(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 3.dp, vertical = 2.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = foreground,
+                fontWeight = if (selected) FontWeight.Black else FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -1450,6 +1510,16 @@ private fun articulationDescription(articulation: PadArticulation): String = whe
     PadArticulation.ARPEGGIATED -> stringResource(R.string.performance_articulation_arpeggiated_description)
     PadArticulation.STACKED -> stringResource(R.string.performance_articulation_stacked_description)
     PadArticulation.MUTED -> stringResource(R.string.performance_articulation_muted_description)
+}
+
+private fun performanceScaleLabel(scale: ScaleDefinition): String = when (scale.id) {
+    "natural_minor" -> "Nat. minor"
+    "harmonic_minor" -> "Harm. minor"
+    "melodic_minor" -> "Mel. minor"
+    "mixolydian" -> "Mixolyd."
+    "major_pentatonic" -> "Maj. penta"
+    "minor_pentatonic" -> "Min. penta"
+    else -> scale.displayName
 }
 
 internal fun articulationModeTestTag(articulation: PadArticulation): String =
@@ -1744,6 +1814,7 @@ private fun HarmonySurface(
     modifier: Modifier = Modifier,
     portraitTwoHanded: Boolean = false,
     chordColumns: Int = 2,
+    scaleColumns: Int = 3,
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -1763,17 +1834,36 @@ private fun HarmonySurface(
                     color = MaterialTheme.colorScheme.secondary,
                     fontWeight = FontWeight.Black,
                 )
-                ChoiceSelector(
-                    label = stringResource(R.string.performance_scales),
-                    selected = scale,
-                    options = ScaleLibrary.all,
-                    optionLabel = { it.displayName },
-                    onSelect = onSetScale,
-                    enabled = enabled,
-                    compact = true,
-                    testTag = scaleChipTestTag(scale.id),
-                    modifier = Modifier.fillMaxWidth(),
+                Text(
+                    stringResource(R.string.performance_scales).uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.Bold,
                 )
+                ScaleLibrary.all.chunked(scaleColumns).forEach { options ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        options.forEach { option ->
+                            ImmediateChoiceButton(
+                                selected = option == scale,
+                                enabled = enabled,
+                                label = performanceScaleLabel(option),
+                                description = option.displayName,
+                                onSelect = { onSetScale(option) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .testTag(scaleChipTestTag(option.id)),
+                            )
+                        }
+                        repeat(scaleColumns - options.size) {
+                            Spacer(Modifier.weight(1f))
+                        }
+                    }
+                }
                 FilterChip(
                     selected = forceToScale,
                     onClick = { onSetForceToScale(!forceToScale) },
@@ -1797,22 +1887,16 @@ private fun HarmonySurface(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         options.forEach { option ->
-                            FilterChip(
+                            ImmediateChoiceButton(
                                 selected = option == chord,
-                                onClick = { onSetChord(option) },
                                 enabled = enabled,
+                                label = option.displayName,
+                                description = option.displayName,
+                                onSelect = { onSetChord(option) },
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxHeight()
-                                    .heightIn(min = 48.dp)
                                     .testTag(chordChipTestTag(option.id)),
-                                label = {
-                                    Text(
-                                        option.displayName,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                },
                             )
                         }
                     }

@@ -52,6 +52,20 @@ data class ActiveNoteInstance(
     }
 }
 
+/** Immutable musical context retained while one performance pad is physically held. */
+data class HeldPadGesture(
+    val leadNote: Int,
+    val velocity: Int,
+    val articulation: PadArticulation,
+    val nextArpeggioVoiceIndex: Int = 0,
+) {
+    init {
+        require(leadNote in 0..127)
+        require(velocity in 1..127)
+        require(nextArpeggioVoiceIndex >= 0)
+    }
+}
+
 data class InstrumentState(
     val config: InstrumentConfig,
     val currentNote: Int,
@@ -63,6 +77,7 @@ data class InstrumentState(
     val lastPitchDeltaSemitones: Int = 0,
     val randomState: Long = DEFAULT_INSTRUMENT_RANDOM_SEED,
     val chromaticShiftBySource: Map<TriggerSource, Int> = emptyMap(),
+    val heldPadBySource: Map<TriggerSource, HeldPadGesture> = emptyMap(),
 ) {
     init {
         require(config.range.contains(currentNote)) { "currentNote must belong to the configured range" }
@@ -71,6 +86,7 @@ data class InstrumentState(
         require(lastSoundedLeadNote == null || lastSoundedLeadNote in 0..127)
         require(lastPitchDeltaSemitones in -127..127)
         require(chromaticShiftBySource.values.all { it in -12..12 })
+        require(heldPadBySource.values.all { config.range.contains(it.leadNote) })
     }
 
     val activeInstanceCount: Int get() = activeBySource.values.sumOf { it.size }
@@ -214,6 +230,12 @@ sealed interface InstrumentAction {
         }
     }
 
+    /** Advances exactly one voice of a held standalone arpeggio. */
+    data class AdvanceArpeggio(
+        val source: TriggerSource,
+        val timestampNanos: Long = 0L,
+    ) : InstrumentAction
+
     data class Undo(
         val source: TriggerSource,
         val velocity: Int,
@@ -313,6 +335,7 @@ class IntervalReducer {
                     timestampNanos = action.timestampNanos,
                     pushHistory = state.lastPitchDeltaSemitones != 0,
                     articulation = state.config.padArticulation,
+                    trackHeldPad = true,
                 )
                 if (consumesExternalAnchor) {
                     transition.copy(state = transition.state.copy(lastExternalNote = null))
@@ -346,10 +369,12 @@ class IntervalReducer {
                 timestampNanos = action.timestampNanos,
                 pushHistory = false,
                 articulation = state.config.padArticulation,
+                trackHeldPad = true,
             )
             is InstrumentAction.StrumTone -> strumTone(state, action)
             is InstrumentAction.UndoThenMove -> undoThenMove(state, action)
             is InstrumentAction.Release -> releaseSource(state, action.source, action.releaseVelocity, action.timestampNanos)
+            is InstrumentAction.AdvanceArpeggio -> advanceArpeggio(state, action)
             is InstrumentAction.Undo -> undo(state, action)
             is InstrumentAction.Home -> home(state, action)
             is InstrumentAction.AnchorExternal -> InstrumentTransition(
@@ -380,7 +405,7 @@ class IntervalReducer {
                 state.config.copy(solfegeWrap = action.enabled),
                 action.timestampNanos,
             )
-            is InstrumentAction.SetChord -> InstrumentTransition(state.copy(config = state.config.copy(chord = action.chord)), emptyList())
+            is InstrumentAction.SetChord -> setChord(state, action)
             is InstrumentAction.SetPadArticulation -> InstrumentTransition(
                 state.copy(config = state.config.copy(padArticulation = action.mode)),
                 emptyList(),
@@ -425,6 +450,7 @@ class IntervalReducer {
             timestampNanos = action.timestampNanos,
             pushHistory = action.steps != 0,
             articulation = state.config.padArticulation,
+            trackHeldPad = true,
         )
         return transition.copy(
             state = transition.state.copy(
@@ -461,6 +487,7 @@ class IntervalReducer {
         timestampNanos: Long,
         pushHistory: Boolean,
         articulation: PadArticulation = PadArticulation.STACKED,
+        trackHeldPad: Boolean = false,
     ): InstrumentTransition {
         require(velocity in 1..127)
         val release = releaseSource(state, source, 0, timestampNanos)
@@ -487,6 +514,24 @@ class IntervalReducer {
         } else {
             releasedState.activeBySource + (source to instances)
         }
+        val nextHeldPads = if (trackHeldPad) {
+            releasedState.heldPadBySource + (
+                source to HeldPadGesture(
+                    leadNote = resolvedTarget,
+                    velocity = velocity,
+                    articulation = articulation,
+                    nextArpeggioVoiceIndex = if (
+                        articulation == PadArticulation.ARPEGGIATED && fullVoicing.isNotEmpty()
+                    ) {
+                        1 % fullVoicing.size
+                    } else {
+                        0
+                    },
+                )
+            )
+        } else {
+            releasedState.heldPadBySource
+        }
         val noteOns = instances.flatMap { instance ->
             listOf(
                 OutputEvent.MidiOut(
@@ -506,7 +551,104 @@ class IntervalReducer {
                 currentNote = resolvedTarget,
                 previousDistinctNotes = history,
                 activeBySource = nextActive,
+                heldPadBySource = nextHeldPads,
                 lastSoundedLeadNote = soundedLead ?: releasedState.lastSoundedLeadNote,
+                lastPitchDeltaSemitones = nextPitchDelta,
+            ),
+            events = release.events + noteOns,
+        )
+    }
+
+    private fun advanceArpeggio(
+        state: InstrumentState,
+        action: InstrumentAction.AdvanceArpeggio,
+    ): InstrumentTransition {
+        val gesture = state.heldPadBySource[action.source]
+            ?: return InstrumentTransition(state, emptyList())
+        if (gesture.articulation != PadArticulation.ARPEGGIATED) {
+            return InstrumentTransition(state, emptyList())
+        }
+        return revoiceHeldPad(state, action.source, action.timestampNanos)
+    }
+
+    private fun setChord(
+        state: InstrumentState,
+        action: InstrumentAction.SetChord,
+    ): InstrumentTransition {
+        if (action.chord == state.config.chord) return InstrumentTransition(state, emptyList())
+        var nextState = state.copy(config = state.config.copy(chord = action.chord))
+        val events = mutableListOf<OutputEvent>()
+        state.heldPadBySource.keys.forEach { source ->
+            val held = checkNotNull(nextState.heldPadBySource[source])
+            nextState = nextState.copy(
+                heldPadBySource = nextState.heldPadBySource + (
+                    source to held.copy(nextArpeggioVoiceIndex = 0)
+                ),
+            )
+            val revoiced = revoiceHeldPad(nextState, source, action.timestampNanos)
+            nextState = revoiced.state
+            events += revoiced.events
+        }
+        return InstrumentTransition(nextState, events)
+    }
+
+    private fun revoiceHeldPad(
+        state: InstrumentState,
+        source: TriggerSource,
+        timestampNanos: Long,
+    ): InstrumentTransition {
+        val gesture = state.heldPadBySource[source]
+            ?: return InstrumentTransition(state, emptyList())
+        val release = releaseOwnedInstances(state, source, timestampNanos)
+        val fullVoicing = buildChord(release.state.config, gesture.leadNote, gesture.velocity)
+        val voiceIndex = if (fullVoicing.isEmpty()) {
+            0
+        } else {
+            gesture.nextArpeggioVoiceIndex % fullVoicing.size
+        }
+        val unshiftedInstances = when (gesture.articulation) {
+            PadArticulation.ARPEGGIATED -> fullVoicing.getOrNull(voiceIndex)?.let(::listOf).orEmpty()
+            PadArticulation.STACKED -> fullVoicing
+            PadArticulation.MUTED -> emptyList()
+        }
+        val instances = shiftInstances(
+            config = release.state.config,
+            instances = unshiftedInstances,
+            semitones = release.state.activeChromaticShiftSemitones,
+        )
+        val nextVoiceIndex = if (
+            gesture.articulation == PadArticulation.ARPEGGIATED && fullVoicing.isNotEmpty()
+        ) {
+            (voiceIndex + 1) % fullVoicing.size
+        } else {
+            0
+        }
+        val nextActive = if (instances.isEmpty()) {
+            release.state.activeBySource
+        } else {
+            release.state.activeBySource + (source to instances)
+        }
+        val noteOns = instances.flatMap { instance ->
+            listOf(
+                OutputEvent.MidiOut(
+                    MidiMessage.NoteOn(instance.channel, instance.note, instance.velocity, timestampNanos),
+                ),
+                OutputEvent.Audio(AudioCommand.NoteOn(instance.note, instance.velocity)),
+            )
+        }
+        val soundedNote = instances.firstOrNull()?.note
+        val nextPitchDelta = if (soundedNote != null && release.state.lastSoundedLeadNote != null) {
+            soundedNote - release.state.lastSoundedLeadNote
+        } else {
+            release.state.lastPitchDeltaSemitones
+        }
+        return InstrumentTransition(
+            state = release.state.copy(
+                activeBySource = nextActive,
+                heldPadBySource = release.state.heldPadBySource + (
+                    source to gesture.copy(nextArpeggioVoiceIndex = nextVoiceIndex)
+                ),
+                lastSoundedLeadNote = soundedNote ?: release.state.lastSoundedLeadNote,
                 lastPitchDeltaSemitones = nextPitchDelta,
             ),
             events = release.events + noteOns,
@@ -629,9 +771,25 @@ class IntervalReducer {
             state.copy(
                 activeBySource = state.activeBySource - source,
                 chromaticShiftBySource = state.chromaticShiftBySource - source,
+                heldPadBySource = state.heldPadBySource - source,
             ),
             events,
         )
+    }
+
+    private fun releaseOwnedInstances(
+        state: InstrumentState,
+        source: TriggerSource,
+        timestampNanos: Long,
+    ): InstrumentTransition {
+        val instances = state.activeBySource[source].orEmpty()
+        val events = instances.flatMap { instance ->
+            listOf(
+                OutputEvent.MidiOut(MidiMessage.NoteOff(instance.channel, instance.note, 0, timestampNanos)),
+                OutputEvent.Audio(AudioCommand.NoteOff(instance.note)),
+            )
+        }
+        return InstrumentTransition(state.copy(activeBySource = state.activeBySource - source), events)
     }
 
     private fun releaseAll(state: InstrumentState, actionTimestamp: Long): Pair<InstrumentState, List<OutputEvent>> {
@@ -644,6 +802,7 @@ class IntervalReducer {
         return state.copy(
             activeBySource = emptyMap(),
             chromaticShiftBySource = emptyMap(),
+            heldPadBySource = emptyMap(),
         ) to events
     }
 
@@ -702,6 +861,13 @@ private fun InstrumentConfig.forceToScale(note: Int): Int {
 
 /** Full current voicing in chord-definition order, preserving duplicates and omitting out-of-range tones. */
 fun InstrumentState.strumNotes(): List<Int> = resolveVoicingNotes(config, currentNote)
+
+/** True when a retained pad owns a multi-voice standalone arpeggio. */
+fun InstrumentState.hasStandaloneArpeggio(source: TriggerSource): Boolean {
+    val gesture = heldPadBySource[source] ?: return false
+    return gesture.articulation == PadArticulation.ARPEGGIATED &&
+        resolveVoicingNotes(config, gesture.leadNote).size > 1
+}
 
 private fun resolveVoicingNotes(config: InstrumentConfig, lead: Int): List<Int> {
     val grid = config.grid()

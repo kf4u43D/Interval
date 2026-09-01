@@ -865,6 +865,63 @@ class IntervalTabletViewModelTest {
     }
 
     @Test
+    fun heldPadArpeggiatesAtTheConfiguredStepWithoutTransportOrToneRow() {
+        val working = preset().copy(
+            musicalContext = MusicalContextSnapshot(
+                chordId = "triad",
+                padArticulation = PadArticulation.ARPEGGIATED,
+            ),
+            toneRow = ToneRowSnapshot(),
+            transport = TransportOptionsSnapshot(tempoBpm = 120, clocksPerStep = 6),
+        )
+        val fixture = fixture(StoredSettings(workingPreset = working))
+        fixture.viewModel.onHostStart()
+        drain()
+        fixture.audio.commands.clear()
+
+        fixture.viewModel.pressInterval(pointerId = 501L, steps = 0)
+        drain()
+        assertEquals(ToneRowMode.IDLE, fixture.viewModel.uiState.value.performance.toneRow.mode)
+        assertEquals(TransportMode.STOPPED, fixture.viewModel.uiState.value.performance.transport.mode)
+        assertTrue(fixture.viewModel.uiState.value.performance.toneRow.entries.isEmpty())
+        assertEquals(
+            listOf(60),
+            fixture.audio.commands.filterIsInstance<AudioCommand.NoteOn>().map { it.note },
+        )
+
+        scheduler.advanceTimeBy(124L)
+        drain()
+        assertEquals(
+            listOf(60),
+            fixture.audio.commands.filterIsInstance<AudioCommand.NoteOn>().map { it.note },
+        )
+
+        scheduler.advanceTimeBy(1L)
+        drain()
+        assertEquals(
+            listOf(60, 57),
+            fixture.audio.commands.filterIsInstance<AudioCommand.NoteOn>().map { it.note },
+        )
+        assertEquals(
+            listOf(57),
+            fixture.viewModel.uiState.value.instrument.activeBySource.values.flatten().map { it.note },
+        )
+
+        fixture.viewModel.releaseInterval(pointerId = 501L)
+        drain()
+        val noteOnCountAtRelease = fixture.audio.commands.filterIsInstance<AudioCommand.NoteOn>().size
+        assertEquals(0, fixture.viewModel.uiState.value.instrument.activeInstanceCount)
+        assertTrue(fixture.viewModel.uiState.value.instrument.heldPadBySource.isEmpty())
+
+        scheduler.advanceTimeBy(500L)
+        drain()
+        assertEquals(
+            noteOnCountAtRelease,
+            fixture.audio.commands.filterIsInstance<AudioCommand.NoteOn>().size,
+        )
+    }
+
+    @Test
     fun strummerUsesItsLongerGateWithoutMovingAndArticulationPersists() {
         val working = preset().copy(
             musicalContext = MusicalContextSnapshot(

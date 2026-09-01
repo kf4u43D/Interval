@@ -17,21 +17,21 @@ Le comportement cible est documenté à partir des fonctions observables décrit
   immédiat et Chromatic Shift momentané.
 - Éditeur MIDI Learn transactionnel pour Notes/CC, canal reçu ou Omni, seuil de CC,
   résolution explicite des conflits et validation/annulation atomique.
-- Accords jusqu’à trois notes, trois articulations de pads (`ARPEGGIATED`, `STACKED`,
-  `MUTED`) et strummer tactile pour égrener le voicing courant.
+- Accords jusqu’à trois notes, arpège autonome par pad, articulations `STACKED`/`MUTED`
+  et strummer tactile pour égrener le voicing courant.
 - Horloge MIDI **entrante**, Start, Stop et Continue.
 - Synthèse interne optionnelle : patch typé de 16 paramètres, oscillateurs soustractifs,
   filtre, ADSR, chorus, temps/feedback/mix du delay, réverbération et panneau non modal.
 - Interface deux mains adaptée à une tablette 10–11 pouces : harmonie/accords à gauche,
   intervalles à droite en portrait comme en paysage, avec les dix variantes d’accords
   accessibles sur la page principale.
-- Variante V2.2 Performance minifiée et coinstallable avec la V1, acteur musical dédié
+- Variante V2.3 Performance minifiée et coinstallable avec la V1, acteur musical dédié
   à priorité audio et moteur natif Release.
 
 Rest, Random Step et Ratchet dans la séquence, l'horloge/transport MIDI sortants, Song
 Position Pointer, le catalogue étendu d'actions mappables, les gammes personnalisées,
 les scopes de presets étendus et l'optimisation soutenue à 90 Hz restent différés après
-cette V2.2. CV, USB audio
+cette V2.3. CV, USB audio
 multicanal, Wi‑Fi/RTP-MIDI, Ableton Link, Bluetooth MIDI, Scala/MPE/MIDI 2.0 et
 microtonalité restent hors périmètre.
 
@@ -77,6 +77,7 @@ Sous Windows PowerShell :
    - `codex/prompts/04_v2_performance_midi_learn.md`
    - `codex/prompts/05_v2_1_performance_surface.md`
    - `codex/prompts/06_v2_2_two_hand_low_latency.md`
+   - `codex/prompts/07_v2_3_direct_harmony_arpeggio.md`
 3. Utiliser le lanceur d'étape correspondant pour exécuter un seul lot en mode écriture
    contrôlé.
 
@@ -89,12 +90,12 @@ L’état du programme de développement est conservé dans `.codex/state.json` 
 - `app/src/main/cpp/` : moteur temps réel Oboe et DSP sans allocation dans le callback.
 - `native-tests/` : tests DSP compilables sur l’hôte sans SDK Android.
 - `docs/` : spécifications, traçabilité du guide, protocole matériel, architecture et validation.
-- `codex/prompts/` : six lots autonomes et significatifs.
+- `codex/prompts/` : sept lots autonomes et significatifs.
 
 ## État d'implémentation
 
-Les trois étapes du **MVP logiciel**, l'étape 4 de la **V2**, l'étape 5 de la **V2.1**
-et l'étape 6 de la **V2.2**
+Les trois étapes du **MVP logiciel**, l'étape 4 de la **V2**, l'étape 5 de la **V2.1**,
+l'étape 6 de la **V2.2** et l'étape 7 de la **V2.3**
 sont terminées depuis le 1er septembre 2026. La certification matérielle étendue reste
 partielle et séparée de
 cette clôture. Les neuf actions tactiles
@@ -133,6 +134,11 @@ latérale pour ne plus écraser le strummer. L’application de jeu est désorma
 optimisée `dev.intervaltablet.performance`, tandis que l’acteur musical possède un thread
 mono-thread à priorité audio indépendant du rendu Compose.
 
+La V2.3 rétablit l’accès direct aux treize gammes dans le panneau main gauche et applique
+gammes, accords et articulations dès le contact tactile. Maintenir un pad en mode Arpégé
+parcourt désormais le voicing au tempo/division configurés, même transport arrêté et
+sans Tone Row. Un changement d’accord revoicera immédiatement les pads maintenus.
+
 La session de travail et une banque interne de 128 presets sont persistées avec migration
 de schéma. Program Change rappelle le slot zéro-based correspondant sur le canal d'entrée
 configuré ; Song Select effectue le même rappel global. Un slot absent n'est pas consommé
@@ -140,8 +146,8 @@ et aucun rappel n'est appliqué en PassThru. L'UI Compose originale ajoute timel
 curseurs, transport, transformations et gestion de presets tout en conservant la surface
 intervallique.
 
-Les pads proposent trois articulations persistées : la voix principale seule, le voicing
-plaqué, ou une navigation muette qui laisse le strummer égrener les notes du voicing. La
+Les pads proposent trois articulations persistées : un arpège autonome tant que le pad est
+maintenu, le voicing plaqué, ou une navigation muette qui laisse le strummer égrener les notes du voicing. La
 lecture automatique Tone Row conserve son rendu polyphonique historique. Le strummer
 accepte balayage dans les deux sens, sauts de plusieurs cordes, vélocité sur l'axe
 secondaire, clavier et services d'accessibilité sans déplacer la note courante.

@@ -49,6 +49,7 @@ import dev.intervaltablet.domain.ToneRowPlayMode
 import dev.intervaltablet.domain.TransportAction
 import dev.intervaltablet.domain.TransportMode
 import dev.intervaltablet.domain.TriggerSource
+import dev.intervaltablet.domain.hasStandaloneArpeggio
 import dev.intervaltablet.domain.midiNoteName
 import dev.intervaltablet.midi.AndroidMidiRepository
 import dev.intervaltablet.midi.MidiConnectionState
@@ -139,6 +140,13 @@ private data class PersistenceRequest(
     val source: PersistenceSource,
 )
 
+private data class ScheduledArpeggio(
+    val generation: Long,
+    val dueNanos: Long,
+    val periodNanos: Long,
+    val job: Job,
+)
+
 private data class MidiLearnSuppressionKey(
     val deviceId: Int,
     val portNumber: Int,
@@ -211,6 +219,8 @@ class IntervalTabletViewModel @JvmOverloads constructor(
     private var selectedPresetSlot: Int = 0
     private var internalClockJob: Job? = null
     private var toneRowReleaseJob: Job? = null
+    private val scheduledArpeggios = mutableMapOf<TriggerSource, ScheduledArpeggio>()
+    private var arpeggioGeneration: Long = 0L
     private var internalClockGeneration: Long = 0L
     private var scheduledInternalTickNanos: Long? = null
     private var persistenceDirty: Boolean = false
@@ -260,6 +270,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
                         }
                         flushPersistenceIfDirty()
                         reconcileInternalClock()
+                        reconcileStandaloneArpeggios()
                         publish()
                     }
                 }
@@ -612,6 +623,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
                 handleToneRowIntent(command.intent)
             }
             is MailboxCommand.InternalClockDue -> handleInternalClockDue(command)
+            is MailboxCommand.ArpeggioDue -> handleArpeggioDue(command)
             MailboxCommand.ToggleAudioEnabled -> if (settingsLoaded) {
                 handleAudioEnabled(!audioMonitorEnabled)
             }
@@ -958,6 +970,62 @@ class IntervalTabletViewModel @JvmOverloads constructor(
         applyPerformanceCommand(
             PerformanceCommand.Transport(
                 TransportAction.InternalClock(maxOf(command.dueNanos, clock.nowNanos(), 0L)),
+            ),
+        )
+    }
+
+    private fun reconcileStandaloneArpeggios() {
+        val desiredSources = performanceState.instrument.heldPadBySource.keys
+            .filterTo(linkedSetOf()) { source ->
+                settingsLoaded && hostStarted && performanceState.instrument.hasStandaloneArpeggio(source)
+            }
+        scheduledArpeggios.keys.toList().forEach { source ->
+            if (source !in desiredSources) {
+                scheduledArpeggios.remove(source)?.job?.cancel()
+            }
+        }
+
+        val periodNanos = performanceState.transport.stepDurationNanos()
+        desiredSources.forEach { source ->
+            val existing = scheduledArpeggios[source]
+            if (existing != null && existing.periodNanos == periodNanos) return@forEach
+            existing?.job?.cancel()
+
+            arpeggioGeneration = nextSequence(arpeggioGeneration)
+            val generation = arpeggioGeneration
+            val now = clock.nowNanos().coerceAtLeast(0L)
+            val due = safeAddNanos(now, periodNanos)
+            val job = viewModelScope.launch(musicalActorDispatcher) {
+                val remaining = due - clock.nowNanos().coerceAtLeast(0L)
+                if (remaining > 0L) delay(ceilNanosToMillis(remaining))
+                enqueueControl(MailboxCommand.ArpeggioDue(source, generation, due))
+            }
+            scheduledArpeggios[source] = ScheduledArpeggio(
+                generation = generation,
+                dueNanos = due,
+                periodNanos = periodNanos,
+                job = job,
+            )
+        }
+    }
+
+    private fun handleArpeggioDue(command: MailboxCommand.ArpeggioDue) {
+        val scheduled = scheduledArpeggios[command.source] ?: return
+        if (scheduled.generation != command.generation || scheduled.dueNanos != command.dueNanos) return
+        scheduledArpeggios.remove(command.source)
+        if (
+            !settingsLoaded ||
+            !hostStarted ||
+            !performanceState.instrument.hasStandaloneArpeggio(command.source)
+        ) {
+            return
+        }
+        applyPerformanceCommand(
+            PerformanceCommand.Instrument(
+                InstrumentAction.AdvanceArpeggio(
+                    source = command.source,
+                    timestampNanos = maxOf(command.dueNanos, clock.nowNanos(), 0L),
+                ),
             ),
         )
     }
@@ -1891,6 +1959,8 @@ class IntervalTabletViewModel @JvmOverloads constructor(
             internalClockJob = null
             toneRowReleaseJob?.cancel()
             toneRowReleaseJob = null
+            scheduledArpeggios.values.forEach { it.job.cancel() }
+            scheduledArpeggios.clear()
             val transition = coordinator.reduce(performanceState, PerformanceCommand.Panic(clock.nowNanos()))
             performanceState = transition.state
             transition.effects.forEach { effect ->
@@ -1956,6 +2026,11 @@ class IntervalTabletViewModel @JvmOverloads constructor(
         ) : MailboxCommand
         data class ToneRowIntentReceived(val intent: ToneRowUiIntent) : MailboxCommand
         data class InternalClockDue(
+            val generation: Long,
+            val dueNanos: Long,
+        ) : MailboxCommand
+        data class ArpeggioDue(
+            val source: TriggerSource,
             val generation: Long,
             val dueNanos: Long,
         ) : MailboxCommand
@@ -2054,6 +2129,7 @@ private fun PerformanceCommand.mayMutatePersistableContent(
             is InstrumentAction.StrumTone,
             is InstrumentAction.UndoThenMove,
             is InstrumentAction.Release,
+            is InstrumentAction.AdvanceArpeggio,
             is InstrumentAction.Home,
             is InstrumentAction.AnchorExternal,
             is InstrumentAction.Panic,
@@ -2171,6 +2247,16 @@ private fun ceilNanosToMillis(nanos: Long): Long {
 
 private fun nextSequence(value: Long): Long {
     return if (value == Long.MAX_VALUE) Long.MAX_VALUE else value + 1L
+}
+
+private fun safeAddNanos(timestampNanos: Long, durationNanos: Long): Long {
+    require(timestampNanos >= 0L)
+    require(durationNanos >= 0L)
+    return if (timestampNanos > Long.MAX_VALUE - durationNanos) {
+        Long.MAX_VALUE
+    } else {
+        timestampNanos + durationNanos
+    }
 }
 
 private fun MidiRepositoryState.connection(direction: MidiPortDirection): dev.intervaltablet.midi.MidiConnectionState {

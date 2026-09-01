@@ -1,4 +1,4 @@
-param([Parameter(Mandatory = $true)][ValidateSet(1, 2, 3, 4, 5, 6)][int] $Stage)
+param([Parameter(Mandatory = $true)][ValidateSet(1, 2, 3, 4, 5, 6, 7)][int] $Stage)
 $ErrorActionPreference = "Stop"
 $Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 if (-not (Get-Command codex -ErrorAction SilentlyContinue)) { throw "Codex CLI absent." }
@@ -9,6 +9,7 @@ $Prompt = switch ($Stage) {
     4 { Join-Path $Root "codex\prompts\04_v2_performance_midi_learn.md" }
     5 { Join-Path $Root "codex\prompts\05_v2_1_performance_surface.md" }
     6 { Join-Path $Root "codex\prompts\06_v2_2_two_hand_low_latency.md" }
+    7 { Join-Path $Root "codex\prompts\07_v2_3_direct_harmony_arpeggio.md" }
 }
 Set-Location $Root
 if (-not (Test-Path ".git")) { git init -b main | Out-Null }

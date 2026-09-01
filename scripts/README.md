@@ -12,7 +12,7 @@
 - `benchmark-gfxinfo.ps1` : vérifie l'identité SHA-256 de l'APK installé, l'activité au
   premier plan et les 90 Hz, chauffe la scène, archive `gfxinfo` brut avec batterie et
   thermique, puis signale explicitement toute troncature du ring buffer.
-- `codex-stage` : lance l’un des quatre prompts autonomes.
+- `codex-stage` : lance l’un des sept prompts autonomes.
 - `init-git` : initialise le dépôt et ajoute le remote lorsque son URL est connue.
 - `install-standard-wrapper` : remplace le lanceur initial par le Wrapper Gradle officiel et vérifie son JAR.
 

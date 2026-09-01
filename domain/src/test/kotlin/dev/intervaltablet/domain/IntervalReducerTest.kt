@@ -569,7 +569,7 @@ class IntervalReducerTest {
     }
 
     @Test
-    fun chordChangeKeepsExistingInstancesReleasable() {
+    fun chordChangeImmediatelyRevoicesHeldPadAndKeepsReplacementReleasable() {
         var state = reducer.initialState(
             InstrumentConfig(chord = ChordLibrary.third, padArticulation = PadArticulation.STACKED),
         )
@@ -580,11 +580,14 @@ class IntervalReducerTest {
             state,
             InstrumentAction.SetChord(ChordLibrary.off, timestampNanos = 70L),
         )
-        assertEquals(original, changed.state.activeBySource.getValue(source))
-        assertTrue(changed.events.isEmpty())
+        assertEquals(original.map { it.note }, noteOffs(changed).map { it.note })
+        assertEquals(listOf(60), noteOns(changed).map { it.note })
+        assertTrue(midiMessages(changed).all { it.timestampNanos == 70L })
+        assertEquals(listOf(60), changed.state.activeBySource.getValue(source).map { it.note })
 
         val released = reducer.reduce(changed.state, InstrumentAction.Release(source, timestampNanos = 71L))
-        assertEquals(original.map { it.note }, noteOffs(released).map { it.note })
+        assertEquals(listOf(60), noteOffs(released).map { it.note })
+        assertTrue(released.state.heldPadBySource.isEmpty())
     }
 
     @Test

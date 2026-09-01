@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Interval Tablet V2.2</string>
+    <string name="app_name">Interval Tablet V2.3</string>
     <string name="performance_note">Note</string>
     <string name="performance_degree">Degré</string>
     <string name="performance_chromatic_anchor">Ancre chromatique</string>
@@ -15,7 +15,7 @@
     <string name="performance_articulation_arpeggiated">Arpégé</string>
     <string name="performance_articulation_stacked">Plaqué</string>
     <string name="performance_articulation_muted">Muet</string>
-    <string name="performance_articulation_arpeggiated_description">Les pads jouent uniquement la note principale</string>
+    <string name="performance_articulation_arpeggiated_description">Maintenez un pad pour parcourir les notes de l’accord au tempo, sans séquence</string>
     <string name="performance_articulation_stacked_description">Les pads jouent toutes les notes de l’accord simultanément</string>
     <string name="performance_articulation_muted_description">Les pads déplacent la note sans produire de son</string>
     <string name="performance_routing">Routage</string>

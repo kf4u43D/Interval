@@ -30,14 +30,19 @@ Au `press` :
    gamme et de la plage actives ; une égalité choisit la note inférieure.
 4. Ajouter l’ancienne hauteur à l’historique uniquement si la nouvelle est différente.
 5. Construire le voicing complet de l’accord courant.
-6. Appliquer l'articulation de pad : lead seul en `ARPEGGIATED`, voicing complet en
-   `STACKED`, aucune note en `MUTED`.
+6. Appliquer l'articulation de pad : première voix en `ARPEGGIATED`, voicing complet en
+   `STACKED`, aucune note en `MUTED`. Le contexte de hauteur/vélocité/articulation du pad
+   reste possédé tant que la source physique est maintenue.
 7. Émettre les Note On retenus et mémoriser exactement les notes/instances actives pour
-   cette source. Une pression muette ne crée pas de propriétaire vide.
+   cette source. Une pression muette ne crée pas de propriétaire de note vide, mais son
+   contexte de pad reste libérable.
 
 Au `release`, émettre un Note Off pour chaque instance créée par cette source. La position musicale ne revient pas en arrière.
 
 Des sources différentes peuvent rester appuyées simultanément et produire une polyphonie indépendante.
+En `ARPEGGIATED`, chaque échéance libère la voix précédente avant d'émettre la suivante,
+dans l'ordre du voicing. L'échéance utilise le tempo et la division configurés, mais ne
+requiert ni transport démarré, ni Tone Row, ni séquence non vide.
 
 Une articulation ne change ni le calcul de hauteur, ni l'historique, ni l'ancre. Son
 changement ne coupe pas les notes déjà tenues : chaque source garde les instances émises
@@ -94,8 +99,8 @@ pression normale. Une même graine et une même suite d'actions produisent les m
 
 - émet un Note Off pour toutes les instances connues sur le canal de sortie ;
 - envoie CC 123 (All Notes Off) et CC 120 (All Sound Off) sur les canaux concernés ;
-- vide les registres de notes actives et de Chromatic Shift, sans modifier la gamme, la
-  clé ou le contenu de Tone Row.
+- vide les registres de notes actives, de pads maintenus et de Chromatic Shift, sans
+  modifier la gamme, la clé ou le contenu de Tone Row.
 
 ## 3. Accords
 
@@ -118,15 +123,19 @@ Le lead utilise la vélocité demandée. Les voix non-lead utilisent 50 % de ce
 
 ### Articulation des pads
 
-- `ARPEGGIATED` est le mode initial. Une pression de pad joue immédiatement le lead
-  uniquement ; le terme décrit ici une articulation une note par geste, pas un scheduler
-  temporel caché.
+- `ARPEGGIATED` est le mode initial. Une pression joue immédiatement le lead ; tant que
+  le pad reste maintenu, les échéances suivantes parcourent cycliquement toutes les voix
+  disponibles. Chaque source possède son curseur et sa note active. Avec `Off` ou un
+  voicing réduit à une note par la plage, aucun tick inutile n'est planifié.
 - `STACKED` joue simultanément toutes les instances du voicing dans leur ordre défini,
   avec la pondération lead/harmonies ci-dessus.
 - `MUTED` conserve navigation, historique, ancre, feedback de pression et enregistrement
   Tone Row, mais n'émet aucun Note On depuis les pads.
 
 Le voicing complet reste calculable dans les trois modes pour alimenter le strummer.
+Changer de type d'accord revoicera immédiatement chaque pad maintenu : Note Off des
+instances précédentes puis Note On du nouveau voicing au même timestamp. L'arpège repart
+de la première voix ; un accord déjà sélectionné est un no-op exact.
 
 ### Strummer
 
@@ -360,15 +369,17 @@ Aucune règle du domaine ne lit directement l’heure système, Android, un pér
 ## 13. Surface deux mains et chemin de jeu prioritaire
 
 - En portrait, la scène réserve environ 43 % de sa largeur à la main gauche
-  (gamme, Force to Scale, dix accords, articulation et strummer) et 57 % à la main droite
+  (treize gammes directes, Force to Scale, dix accords, articulation et strummer) et 57 % à la main droite
   (Home/Undo/Panic et grille 3×3 des intervalles).
 - En paysage, l’harmonie reste également à gauche au lieu de consommer une bande au-dessus
   de la scène. Les contrôles de routage, audio, synthé et console restent disponibles dans
   le ruban système.
-- Accords, pads, articulations et cordes exposent des cibles tactiles d’au moins 48 dp dans
-  les fenêtres tablette couvertes. L’articulation utilise une grille 2×2 afin de ne pas
+- Gammes, accords, pads, articulations et cordes exposent des cibles tactiles d’au moins
+  48 dp dans les fenêtres tablette couvertes. Gammes, accords et articulations appliquent
+  leur sélection dès le front descendant tactile, tout en conservant une action sémantique
+  pour clavier et accessibilité. L’articulation utilise une grille 2×2 afin de ne pas
   réduire la surface du strummer.
-- L’application de jeu V2.2 est une variante minifiée, compilée avec le moteur natif
+- L’application de jeu V2.3 est une variante minifiée, compilée avec le moteur natif
   Release et isolée du package V1. La variante instrumentée reste réservée aux tests.
 - Les actions tactiles rejoignent la mailbox FIFO d’un acteur mono-thread possédé par le
   ViewModel et exécuté à priorité Android audio. Leur traitement musical, MIDI et audio
@@ -377,12 +388,11 @@ Aucune règle du domaine ne lit directement l’heure système, Android, un pér
   frame ou `High input latency` n’est jamais présentée comme une latence acoustique ou
   MIDI absolue sans mesure loopback.
 
-## 14. Reports après la V2.2
+## 14. Reports après la V2.3
 
 - Les éléments de séquence typés Rest, Random Step et Ratchet ne sont pas assimilés à un
-  mouvement entier. Ratchet attend un ordonnanceur de Note On futures annulable par
-  génération, afin qu'un Stop, Panic ou changement de destination ne laisse aucun
-  retrigger tardif.
+  mouvement entier. L'ordonnanceur d'arpège V2.3 ne remplace pas leur modèle : Ratchet
+  attend encore ses propres actions et règles d'annulation liées au transport/destination.
 - L'émission MIDI Clock/Start/Stop/Continue et Song Position Pointer est différée ; cette
   spécification ne couvre que la réception du transport MIDI.
 - Les sélections de gamme, clé, accord et preset par mapping, les CC relatifs/continus,
