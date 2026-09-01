@@ -5,17 +5,51 @@ Dates de référence : **20 août 2026** pour la clôture historique des portes 
 **22 août 2026** pour l'extension articulation/strummer, anti-saturation et le lot final
 de paramètres/panneau Synthé avec validation du stream réel, **31 août 2026** pour la
 revalidation Wi-Fi et le correctif de packaging Oboe, puis **1er septembre 2026** pour le
-suivi continu des sliders Synthé, la clôture du MVP et le gate final Stage 4/V2.
+suivi continu des sliders Synthé, la clôture du MVP, le gate final Stage 4/V2 et la
+réception Stage 5/V2.1.
 
 Ce rapport sépare les preuves logicielles réellement exécutées de la réception partielle
 sur Samsung SM-X620 et des validations qui exigent encore un contrôleur MIDI USB, un vrai
 geste multi-touch, TalkBack ou un soak prolongé. Il clôt la tranche logicielle des portes
 1 à 4 et la V2 ; il ne constitue pas une preuve matérielle complète ni une preuve de
-parité avec le module de référence. Les chiffres des portes 1 à 3 restent ci-dessous des
-archives datées. L'état V2 logiciel est `complete` ; la certification matérielle reste
+parité avec le module de référence. Les chiffres des portes 1 à 4 restent ci-dessous des
+archives datées. L'état V2.1 logiciel est `complete` ; la certification matérielle reste
 explicitement partielle.
 
-## Résultat synthétique du gate V2 final — 1er septembre 2026
+## Résultat synthétique du gate V2.1 final — 1er septembre 2026
+
+Commit d'implémentation vérifié : `61a71509dc15342edc3901fb6afb73103d7046f8`.
+
+| Domaine | Résultat | Preuve ou commande |
+|---|---|---|
+| Domaine Kotlin pur | Réussi | `:domain:test` : 136/136 tests, 12 suites, 0 échec/erreur/ignoré |
+| Tests JVM application | Réussi | `:app:testDebugUnitTest` : 161/161 tests, 19 suites, 0 échec/erreur/ignoré |
+| Total déterministe Kotlin/JVM | Réussi | 297/297 tests, 0 échec/erreur/ignoré |
+| DSP et pont JNI/Oboe hôte | Réussi | CTest 2/2 |
+| Diagnostic et structure | Réussi | `doctor.ps1` : 0 erreur ; `verify-structure.ps1` : OK ; avertissements limités à `kotlinc` autonome absent et aux EOL historiques |
+| Lint Android | Réussi | Debug, Release, Benchmark et Instrumented : 0 issue |
+| Gate et assemblages | Réussi | Debug, Release non signée, Benchmark, Instrumented et AndroidTest verts |
+| Gate agrégé | Réussi | `scripts/verify.ps1` vert, runtimes natifs contrôlés sur quatre ABI |
+| Tests directs tablette | Réussi | SM-X620/API 36 : 7/7, 0 échec/erreur/ignoré, 17,279 s |
+| Surface V2.1 | Reçue dans le périmètre testé | V1/V2.1 coinstallées ; petits pads, dix accords, treize gammes, Force to Scale et trois contrôles Delay accessibles |
+| MIDI USB réel | Non exécuté | aucun périphérique USB MIDI cible disponible |
+
+### Artefacts finaux V2.1
+
+| Artefact | Taille | SHA-256 | Statut |
+|---|---:|---|---|
+| `app-debug.apk` | 40 061 939 octets | `86bf59353442cccb3bb699e1aaf0a7ffe5748b4ba35d70eec48c847dabf33d59` | assemblé, runtime natif vérifié |
+| `app-release-unsigned.apk` | 9 218 044 octets | `933464fc513ba6332c3086d1fe115873ae5cce80d3e99585a6367d68f1c4a83a` | assemblé, volontairement non signé |
+| `app-benchmark.apk` | 9 226 280 octets | `b606ff5cb3629351920d6c9b536394882aeae62e49a769b5dc4fa36b8ec17c73` | assemblé |
+| `app-instrumented.apk` | 39 799 193 octets | `079a8813b1cd973036e4cce3b88929b72ea8ddbe2ca1c055d17b127c04dcb4d8` | installé et relancé |
+| `app-instrumented-androidTest.apk` | 2 547 959 octets | `3698057d3debfd00c04c4dbca79a4ea02e521d32ea0bd123d9e2792b318d0c91` | installé pour la réception puis désinstallé |
+
+La preuve directe anonymisée est archivée sous
+[`implementation/evidence/2026-09-01-sm-x620/v2-1-stage5-instrumentation.txt`](implementation/evidence/2026-09-01-sm-x620/v2-1-stage5-instrumentation.txt).
+Après la réception, seules `dev.intervaltablet.debug` (V1) et
+`dev.intervaltablet.instrumented` (V2.1) restent installées.
+
+## Gate V2 Stage 4 — archive antérieure à la V2.1
 
 Commit vérifié : `13c2d7c4915e8da65c5e6898daf8ee9a5f253e75`.
 
@@ -375,8 +409,8 @@ Suivre `docs/HARDWARE_TEST_PROTOCOL.md` et stocker les preuves sous
    sans charge AAudio concurrente.
 
 La réception partielle ne ferme aucun indicateur global MIDI USB, écoute comparative ou
-soak audio. `.codex/state.json` clôt néanmoins la V2 logicielle en `complete`, avec appareil
-Android, UI tablette et contrôle Synthé continu reçus, mais USB MIDI, rendu soutenu à 90 Hz,
+soak audio. `.codex/state.json` clôt néanmoins la V2.1 logicielle en `complete`, avec appareil
+Android, UI tablette, surface harmonique et contrôle Synthé continu reçus, mais USB MIDI, rendu soutenu à 90 Hz,
 écoute audio comparative et soak audio toujours faux.
 
 ## État du workspace
@@ -388,7 +422,7 @@ effectué ; aucune URL ni état distant supplémentaire n'est consigné ici.
 
 ## Limite d'interprétation
 
-Les résultats démontrent la cohérence déterministe des portes 1–4, la compilation Android,
+Les résultats démontrent la cohérence déterministe des portes 1–5, la compilation Android,
 les quatre Lint, le build natif hôte, les artefacts identifiés, sept tests instrumentés
 courants, dix cycles courts du stream réel et les huit passes A/B archivées sur SM-X620. Ils ne
 démontrent pas le comportement MIDI USB, le vrai multi-touch, TalkBack, une fluidité
