@@ -169,6 +169,17 @@ Restart uniquement dans le contexte de lecture défini par la spécification
 comportementale. Performance Lock masque
 l'édition secondaire de l'arrangement sans retirer le transport ni les commandes de jeu.
 
+## Extension porte 7 — surface harmonique V2.3
+
+- Portrait et paysage conservent une séparation latérale à deux mains : harmonie à gauche,
+  intervalles à droite.
+- Les treize gammes standards et dix accords sont simultanément visibles en boutons
+  dédiés d'au moins 48 dp ; aucun menu n'est requis pendant le jeu.
+- Gamme, accord et articulation répondent au pointer-down. Clavier et services
+  d'accessibilité utilisent une action sémantique distincte, sans double callback au up.
+- `ARPÉGÉ` indique explicitement qu'un maintien parcourt les voix au tempo/division sans
+  nécessiter de séquence. Le changement d'accord d'un pad maintenu est sonore immédiatement.
+
 Rest, Random Step, Ratchet, Clock/transport MIDI sortants, Song Position Pointer, actions
 mappées étendues et catalogues de gammes/presets ne doivent pas apparaître comme contrôles
 inactifs ou factices en V2. L'optimisation soutenue à 90 Hz et la réception

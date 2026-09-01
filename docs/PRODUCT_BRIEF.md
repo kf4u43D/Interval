@@ -2,7 +2,7 @@
 
 ## Proposition
 
-Interval Tablet transforme une tablette Android en instrument de composition et performance fondé sur la navigation par intervalles diatoniques. L’utilisateur ne choisit pas d’abord une note absolue : il déplace un curseur dans une gamme avec neuf actions rapides, répète un déplacement ou un écart de hauteur, choisit si les pads jouent le lead, plaquent le voicing ou restent muets, puis peut égrener ce voicing avec un strummer. La scène se joue à deux mains, harmonie et accords à gauche, intervalles à droite. Il enregistre aussi une série, la transforme et l’envoie vers des instruments MIDI externes. Un éditeur MIDI Learn permet d’assigner Notes et CC sans quitter la tablette. Un synthé interne léger permet de jouer sans autre générateur sonore.
+Interval Tablet transforme une tablette Android en instrument de composition et performance fondé sur la navigation par intervalles diatoniques. L’utilisateur ne choisit pas d’abord une note absolue : il déplace un curseur dans une gamme avec neuf actions rapides, répète un déplacement ou un écart de hauteur, choisit si les pads arpègent le voicing, le plaquent ou restent muets, puis peut aussi égrener ce voicing avec un strummer. La scène se joue à deux mains, harmonie et accords à gauche, intervalles à droite. Il enregistre aussi une série, la transforme et l’envoie vers des instruments MIDI externes. Un éditeur MIDI Learn permet d’assigner Notes et CC sans quitter la tablette. Un synthé interne léger permet de jouer sans autre générateur sonore.
 
 ## Utilisateurs cibles
 
@@ -48,8 +48,8 @@ Interval Tablet transforme une tablette Android en instrument de composition et 
 
 Rest, Random Step et Ratchet, l'horloge/transport MIDI sortants et Song Position Pointer,
 les actions mappées supplémentaires, les catalogues étendus de gammes/presets et la cible
-de rendu soutenu à 90 Hz sont différés. Ratchet nécessite notamment un ordonnanceur de
-retrigger annulable, distinct de la release unique actuelle. Les validations USB MIDI,
+de rendu soutenu à 90 Hz sont différés. Ratchet nécessite notamment ses propres actions
+de retrigger et règles d'annulation transport, distinctes de l'arpège autonome. Les validations USB MIDI,
 TalkBack, multi-touch réel, loopback et soak restent des réceptions matérielles.
 
 ## Indicateurs de réussite du prototype

@@ -31,7 +31,7 @@ PDF.
 | Huit parcours de lecture | Play Options | 27–28 | `BEHAVIOR_SPEC.md` | 2/4 | Prime, Retro, Random signé, Pendulum et Auto-Transpose/Auto-Translate haut/bas |
 | Transformations par boutons | Interval Button Option | 28–30 | `BEHAVIOR_SPEC.md` | 2/4 | Transposition/translation/inversion sans microtonalité ; accumulation automatique par cycle en V2 |
 | Accords jusqu’à trois voix | Polyphony — Chords | 31–32 | `BEHAVIOR_SPEC.md`, `AUDIO_DSP_SPEC.md` | 1/3 | Neuf structures par degrés, noms/UI originaux autorisés |
-| Articulation pads et strummer | Polyphony — Chords/MIDI Out | 31–33 | `BEHAVIOR_SPEC.md`, `UI_UX_SPEC.md` | 3 | Extension tactile originale : lead, accord plaqué ou pad muet puis égrenage ; aucune prétention de reproduire un geste ou panneau propriétaire |
+| Articulation pads et strummer | Polyphony — Chords/MIDI Out | 31–33 | `BEHAVIOR_SPEC.md`, `UI_UX_SPEC.md` | 3, 7 | Extension tactile originale : arpège autonome par maintien, accord plaqué ou pad muet puis égrenage ; aucune prétention de reproduire un geste ou panneau propriétaire |
 | Polyphonie tactile simultanée | Polyphony — MIDI Out | 33 | `MIDI_SPEC.md` | 1 | Notes suivies par origine de pression |
 | Mapping de notes et CC | MIDI In ; Setup/MIDI | 34, 46–47 | `MIDI_SPEC.md` | 1 | CC déclencheur au seuil documenté localement |
 | All Notes Off | MIDI Out | 35 | `MIDI_SPEC.md` | 1 | Bouton Panic toujours visible + CC 123 par canal concerné |

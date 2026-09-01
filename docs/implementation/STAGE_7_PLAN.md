@@ -86,17 +86,29 @@ reste absent mais Gradle domaine est disponible.
 
 | Validation | Commande/protocole | Résultat | Preuve ou limite |
 |---|---|---|---|
-| Structure | `scripts\verify-structure.ps1` | À exécuter | |
-| Domaine | `scripts\verify-domain.ps1` | À exécuter | |
-| DSP/JNI hôte | `scripts\verify-native.ps1` | À exécuter | |
-| Android | `scripts\verify.ps1` | À exécuter | SDK présent |
-| Tablette | installation + tests instrumentés | À exécuter | SM-X620 Wi-Fi ADB |
+| Structure | `scripts\verify-structure.ps1` | Réussi | 297 fichiers ; avertissements EOL historiques |
+| Domaine | `scripts\verify-domain.ps1` | Réussi | 138/138 |
+| DSP/JNI hôte | `scripts\verify-native.ps1` | Réussi | CTest 2/2 |
+| Android | `scripts\verify.ps1` + variantes | Réussi | 162/162 app, cinq Lint, assemblages verts |
+| Tablette | installation + tests instrumentés | Réussi | 8/8 en 28,464 s, V2.3 ART `speed` |
 | MIDI USB | `docs/HARDWARE_TEST_PROTOCOL.md` | Différé | matériel MIDI requis |
 
 ## Critères de sortie
 
-- [ ] Treize gammes et dix accords directs, visibles et tactiles à 48 dp.
-- [ ] Accord sélectionné dès touch-down et revoicing audible des pads maintenus.
-- [ ] Arpège multi-voix autonome, arrêté proprement au Release/Panic.
-- [ ] Porte logicielle, installation performance et instrumentation tablette réussies.
-- [ ] Documentation, matrice, `.codex/state.json` et `CHANGELOG.md` à jour.
+- [x] Treize gammes et dix accords directs, visibles et tactiles à 48 dp.
+- [x] Accord sélectionné dès touch-down et revoicing des pads maintenus.
+- [x] Arpège multi-voix autonome, arrêté proprement au Release/Panic.
+- [x] Porte logicielle, installation performance et instrumentation tablette réussies.
+- [x] Documentation, matrice, `.codex/state.json` et `CHANGELOG.md` à jour.
+
+## Résultat
+
+Terminé le 1er septembre 2026. Le gate obtient 138/138 tests domaine, 162/162 tests
+application, 8/8 tests instrumentés en 28,464 s, CTest 2/2, cinq Lint sans issue et tous
+les assemblages. L’APK Performance `0.2.3-dev-performance` (9 243 536 octets, SHA-256
+`E40AE016F1A8FCFE20A23629B5F4D17C2CB4BC1E32F3741380BBF5ED02C1603B`) est installé et
+compilé ART `speed` sur SM-X620 ; seules la V1 et cette V2.3 restent présentes.
+
+L’instrumentation prouve les treize gammes et dix accords directs, le minimum 48 dp et
+le callback d’accord avant pointer-up. L’écoute utilisateur, le vrai multi-touch,
+TalkBack, MIDI USB, le loopback et le soak restent des validations matérielles séparées.

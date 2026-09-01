@@ -363,6 +363,39 @@ La baisse des symptômes d’entrée Android ferme la régression grossière sig
 `gfxinfo` ne mesure pas le délai acoustique. Loopback tactile/MIDI→audio, MIDI USB réel,
 vrai multi-touch, TalkBack, rendu soutenu à 90 Hz, hotplug et soak restent ouverts.
 
+## Étape 7 — V2.3 harmonie directe et arpège autonome
+
+**V2.3 logicielle terminée, installée et reçue sur SM-X620 le 1er septembre 2026.**
+
+- [x] Les treize gammes sont des boutons permanents dans la zone main gauche ; les dix
+  accords restent directs et les deux grilles s’adaptent en 3/2 colonnes en portrait et
+  5/5 colonnes en paysage.
+- [x] Le contrôle Compose immédiat applique gamme, accord ou articulation au touch-down,
+  conserve focus/clavier/sémantique et ne produit pas de second callback au relâchement.
+- [x] Le domaine retient un contexte de pad immutable par source. `AdvanceArpeggio`
+  libère la voix précédente puis parcourt le voicing, doublures comprises ; SetChord
+  revoicera immédiatement les pads maintenus et remet leur curseur à la première voix.
+- [x] L’acteur planifie une échéance bornée par source avec la durée de pas du transport,
+  même transport arrêté et Tone Row vide. Release/Panic/reconfiguration/fermeture rendent
+  les callbacks tardifs inoffensifs.
+- [x] Gate : 138/138 domaine sur 12 suites, 162/162 application sur 19 suites, soit
+  300/300 JVM, CTest 2/2, cinq Lint à zéro issue, tous les assemblages et quatre ABI.
+- [x] Instrumentation SM-X620/API 36 : 8/8 en 28,464 s. Les treize gammes, dix accords,
+  neuf pads, articulations et cordes sont visibles et ≥48 dp ; l’accord est observé avant
+  le pointer-up.
+- [x] `dev.intervaltablet.performance` version `0.2.3-dev-performance` est minifiée,
+  installée, au premier plan sans crash et compilée ART `speed`. Seules cette V2.3 et la
+  V1 `dev.intervaltablet.debug` sont installées.
+
+Commit d’implémentation vérifié :
+`385c574ce9b1ec37a95f81fe4b50d511eb2bf646`.
+APK Performance final : 9 243 536 octets, SHA-256
+`E40AE016F1A8FCFE20A23629B5F4D17C2CB4BC1E32F3741380BBF5ED02C1603B`.
+
+L’écoute du cycle d’arpège et du revoicing est prête pour réception utilisateur. MIDI USB
+réel, vrai multi-touch, TalkBack, loopback, rendu soutenu à 90 Hz, hotplug et soak restent
+ouverts sans bloquer cette livraison.
+
 ## Dépôt
 
 Le workspace est un dépôt Git local sur `main` avec le Wrapper Gradle officiel 8.13 et son

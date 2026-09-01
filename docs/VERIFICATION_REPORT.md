@@ -6,15 +6,47 @@ Dates de référence : **20 août 2026** pour la clôture historique des portes 
 de paramètres/panneau Synthé avec validation du stream réel, **31 août 2026** pour la
 revalidation Wi-Fi et le correctif de packaging Oboe, puis **1er septembre 2026** pour le
 suivi continu des sliders Synthé, la clôture du MVP, le gate final Stage 4/V2 et la
-réception Stage 5/V2.1, puis la réception Stage 6/V2.2 deux mains et Performance.
+réception Stage 5/V2.1, Stage 6/V2.2 deux mains et Performance, puis Stage 7/V2.3 avec
+harmonie directe et arpège autonome.
 
 Ce rapport sépare les preuves logicielles réellement exécutées de la réception partielle
 sur Samsung SM-X620 et des validations qui exigent encore un contrôleur MIDI USB, un vrai
 geste multi-touch, TalkBack ou un soak prolongé. Il clôt la tranche logicielle des portes
-1 à 6 et la V2.2 ; il ne constitue pas une preuve matérielle complète ni une preuve de
+1 à 7 et la V2.3 ; il ne constitue pas une preuve matérielle complète ni une preuve de
 parité avec le module de référence. Les chiffres des portes 1 à 4 restent ci-dessous des
-archives datées. L'état V2.2 logiciel est `complete` ; la certification matérielle reste
+archives datées. L'état V2.3 logiciel est `complete` ; la certification matérielle reste
 explicitement partielle.
+
+## Résultat synthétique du gate V2.3 final — 1er septembre 2026
+
+Commit d'implémentation vérifié : `385c574ce9b1ec37a95f81fe4b50d511eb2bf646`.
+
+| Domaine | Résultat | Preuve ou commande |
+|---|---|---|
+| Domaine Kotlin pur | Réussi | `:domain:test` : 138/138 tests, 12 suites, 0 échec/erreur/ignoré |
+| Tests JVM application | Réussi | `:app:testDebugUnitTest` : 162/162 tests, 19 suites, 0 échec/erreur/ignoré |
+| Total déterministe Kotlin/JVM | Réussi | 300/300 tests |
+| Tests instrumentés | Réussi | SM-X620/API 36 : 8/8 en 28,464 s, dont treize gammes directes et accord au touch-down |
+| DSP et pont JNI/Oboe hôte | Réussi | CTest 2/2 |
+| Diagnostic et structure | Réussi | `doctor.ps1` : 0 erreur ; `verify.ps1` vert ; avertissements historiques explicités |
+| Lint Android | Réussi | Debug, Release, Benchmark, Instrumented et Performance : 0 issue |
+| Gate et assemblages | Réussi | Debug, Release, Benchmark, Instrumented, Performance et AndroidTest verts |
+| Runtime natif APK | Réussi | quatre ABI avec `libinterval_audio.so`, `liboboe.so` et `libc++_shared.so` |
+| Installation | Réussi | V1 et V2.3 `0.2.3-dev-performance` seules présentes ; V2.3 ART `speed`, lancement sans crash |
+
+Le test domaine parcourt les voix d’accord, leurs doublures, le revoicing et les releases.
+Le test ViewModel prouve une seconde voix à 125 ms à 120 BPM/division 6 avec transport
+arrêté et Tone Row vide. Le test Compose garde le pointeur abaissé et constate le nouvel
+accord avant `up()`. Ces preuves ne remplacent pas une mesure acoustique loopback.
+
+### Artefact V2.3 installé
+
+| Artefact | Taille | SHA-256 | Statut |
+|---|---:|---|---|
+| `app-performance.apk` | 9 243 536 octets | `E40AE016F1A8FCFE20A23629B5F4D17C2CB4BC1E32F3741380BBF5ED02C1603B` | minifié, installé, ART `speed`, moteur natif Release |
+
+La synthèse de preuve est archivée sous
+[`implementation/evidence/2026-09-01-sm-x620/v2-3-stage7-summary.md`](implementation/evidence/2026-09-01-sm-x620/v2-3-stage7-summary.md).
 
 ## Résultat synthétique du gate V2.2 final — 1er septembre 2026
 

@@ -123,6 +123,21 @@ Ces tests instrumentés sont requis pour la réception matérielle. Ils ne sont 
   `SynthPanelAccessibilityTest` couvre les contrôles, l'ordre aperçu/commit, le temps et
   le feedback du delay, ainsi que les diagnostics exposés par Compose.
 
+## État de preuve du lot V2.3
+
+- `PadArticulationTest` prouve le cycle complet, le wrap de voix, les vélocités,
+  doublures, revoicing d’accord, ownership, Release et callback tardif no-op.
+- `IntervalTabletViewModelTest` utilise une horloge et un dispatcher virtuels : à
+  120 BPM/division 6, la seconde voix arrive à 125 ms alors que transport et Tone Row
+  restent arrêtés/vides ; Release annule les échéances futures.
+- `IntervalPadAccessibilityTest` force 900 × 1 440 dp, trouve les treize gammes, dix
+  accords, neuf pads et trois articulations à au moins 48 dp, puis laisse un pointeur
+  abaissé pour prouver que le callback d’accord précède `up()`.
+- Gate final : 138/138 tests domaine, 162/162 application, 8/8 instrumentés sur
+  SM-X620/API 36, CTest 2/2, cinq Lint sans issue et tous les assemblages.
+- L’APK Performance est contrôlé sur quatre ABI, installé en `0.2.3-dev-performance`,
+  compilé ART `speed`, lancé sans crash et coinstallé uniquement avec la V1.
+
 ## État de preuve du lot V2.2
 
 - `IntervalPadAccessibilityTest` force une fenêtre portrait 900 × 1 440 dp, prouve que

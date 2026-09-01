@@ -4,6 +4,13 @@
 
 ### Added
 
+- Étape 7/V2.3 : treize boutons de gammes permanents dans la zone main gauche, accords
+  et articulations appliqués dès le touch-down avec sémantiques accessibles conservées.
+- Arpège autonome par pad maintenu, cadencé par le tempo/division sans transport ni
+  Tone Row, avec curseur/ownership par source et revoicing immédiat lors de SetChord.
+- Variante Performance `0.2.3-dev-performance` validée 300/300 JVM, CTest 2/2, cinq
+  Lint, 8/8 instrumentés sur SM-X620 et installée AOT `speed` aux côtés de la V1.
+
 - Dépôt Git local initialisé sur `main`, remote `origin` configuré et Gradle Wrapper
   officiel 8.13 ajouté avec JAR et distribution protégés par leurs empreintes SHA-256.
 - Workspace VS Code/Codex et documentation d’architecture.

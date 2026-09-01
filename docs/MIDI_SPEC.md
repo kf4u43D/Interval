@@ -141,6 +141,9 @@ Dans les modes qui transmettent, l'octet temps réel sortant précède donc les 
   `FB` reprend cette position sans rejouer de note avant le prochain `F8` qualifiant.
 - L'horloge interne n'émet au plus qu'un tick par callback, même tardif, puis rebase
   l'échéance suivante afin de ne jamais produire une rafale de rattrapage.
+- L'arpège de pad utilise la même durée de pas (tempo et division) mais pas l'état du
+  transport : il fonctionne en `Stopped` et sans Tone Row. Chaque tick libère la Note On
+  précédente de sa source avant la suivante ; Release/Panic annulent le propriétaire.
 
 La sortie MIDI Clock/Start/Stop/Continue et Song Position Pointer n'est pas implémentée
 dans ce lot ; « Clock MIDI » désigne ici uniquement une source entrante.

@@ -189,6 +189,12 @@ module de référence. Les écarts et preuves sont suivis dans
 ## Vérification livrée
 
 Les validations reproductibles sont décrites dans `docs/VERIFICATION_REPORT.md`. Le gate
+V2.3 du 1er septembre 2026 réussit **138 tests domaine, 162 tests application et 8 tests
+instrumentés**, soit 300/300 tests JVM, CTest 2/2, cinq Lint sans issue et tous les
+assemblages. La SM-X620 confirme les treize gammes directes, les cibles à 48 dp et
+l’accord au touch-down ; `0.2.3-dev-performance` est installée et compilée ART `speed`.
+
+Le gate historique
 V2.2 du 1er septembre 2026 réussit **136 tests domaine, 161 tests application et 8 tests
 instrumentés**, CTest 2/2, cinq Lint sans issue et tous les assemblages. Sur SM-X620, un
 stress de 108 frappes donne p90 17 ms et 12 signaux de forte latence d’entrée sur 121

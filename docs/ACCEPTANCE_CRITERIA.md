@@ -269,3 +269,27 @@ hotplug et soak audio restent des validations matérielles distinctes.
 
 Le scénario `gfxinfo` ne clôt pas la mesure loopback tactile/MIDI→audio. MIDI USB réel,
 TalkBack, vrai multi-touch, 90 Hz soutenu, hotplug et soak audio restent ouverts.
+
+## Porte 7 — V2.3 harmonie directe et arpège autonome
+
+### Critères logiciels et tablette
+
+- [x] Les treize gammes standards et les dix accords sont simultanément visibles dans le
+  panneau main gauche, en portrait et en paysage, sans menu intermédiaire.
+- [x] Gammes, accords et articulations répondent au front descendant tactile ; leurs
+  actions sémantiques clavier/accessibilité restent distinctes et ne doublent pas le geste.
+- [x] Changer d’accord revoicera immédiatement les pads maintenus, avec Note Off des
+  anciennes instances avant les nouveaux Note On au même timestamp.
+- [x] En mode Arpégé, maintenir un pad parcourt cycliquement toutes les voix disponibles
+  au tempo/division configurés, transport arrêté et Tone Row vide compris.
+- [x] Chaque arpège reste possédé par sa source ; Release, reconfiguration, Panic,
+  HostStop et `onCleared()` annulent sessions, notes et échéances tardives.
+- [x] Le gate réussit 138/138 tests domaine, 162/162 tests application, soit 300/300 JVM,
+  CTest 2/2, cinq Lint sans issue, tous les assemblages et le runtime natif quatre ABI.
+- [x] La suite SM-X620/API 36 réussit 8/8 en 28,464 s ; elle mesure les treize gammes,
+  dix accords, articulations, cordes et pads à au moins 48 dp et vérifie l’accord au down.
+- [x] La variante `dev.intervaltablet.performance` est installée en version
+  `0.2.3-dev-performance`, compilée ART `speed` et coinstallée avec la seule V1.
+
+Le MIDI USB réel, le vrai multi-touch, TalkBack, le loopback tactile/MIDI→audio, le rendu
+soutenu à 90 Hz, le hotplug et le soak audio restent des validations matérielles ouvertes.
