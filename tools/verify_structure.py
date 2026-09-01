@@ -173,8 +173,8 @@ def main() -> int:
     state_path = ROOT / ".codex/state.json"
     if state_path.exists():
         state = json.loads(state_path.read_text(encoding="utf-8"))
-        if state.get("currentStage") not in {1, 2, 3, 4, 5}:
-            errors.append(".codex/state.json: currentStage doit valoir 1, 2, 3, 4 ou 5")
+        if state.get("currentStage") not in {1, 2, 3, 4, 5, 6}:
+            errors.append(".codex/state.json: currentStage doit valoir 1, 2, 3, 4, 5 ou 6")
         if state.get("status") not in {"not-started", "in-progress", "blocked", "complete"}:
             errors.append(".codex/state.json: status non reconnu")
 

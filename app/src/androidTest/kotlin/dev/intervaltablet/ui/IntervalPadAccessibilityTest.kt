@@ -2,12 +2,18 @@ package dev.intervaltablet.ui
 
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.DeviceConfigurationOverride
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.ForcedSize
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import dev.intervaltablet.AppUiState
@@ -30,6 +36,116 @@ import org.junit.runner.RunWith
 class IntervalPadAccessibilityTest {
     @get:Rule
     val composeRule = createAndroidComposeRule<IntervalComposeTestActivity>()
+
+    @Test
+    @OptIn(ExperimentalTestApi::class)
+    fun portraitStageSeparatesLeftHarmonyFromRightIntervals() {
+        var portraitDensity = 0f
+        val state = AppUiState(
+            performance = PerformanceCoordinatorState.initial(
+                InstrumentConfig(chord = ChordLibrary.triad),
+            ),
+            settingsLoaded = true,
+        )
+        composeRule.setContent {
+            DeviceConfigurationOverride(
+                DeviceConfigurationOverride.ForcedSize(DpSize(width = 900.dp, height = 1_440.dp)),
+            ) {
+                portraitDensity = LocalDensity.current.density
+                IntervalTabletTheme {
+                    PerformanceScreen(
+                        state = state,
+                        onIntervalDown = { _, _ -> },
+                        onIntervalUp = {},
+                        onIntervalOneShot = {},
+                        onUndo = {},
+                        onHome = {},
+                        onPanic = {},
+                        onSetScale = {},
+                        onSetRoot = {},
+                        onSetChord = {},
+                        onSetForceToScale = {},
+                        onSetRange = {},
+                        onSetWrap = {},
+                        onSetInputChannel = {},
+                        onSetOutputChannel = {},
+                        onSetMode = {},
+                        onSelectSource = {},
+                        onSelectDestination = {},
+                        onResetMidiMapping = {},
+                        onToggleAudio = {},
+                        onTogglePerformanceLock = {},
+                        onDismissStatus = {},
+                    )
+                }
+            }
+        }
+
+        val harmonyBounds = composeRule
+            .onNodeWithTag(HarmonyHandPaneTestTag, useUnmergedTree = true)
+            .assertIsDisplayed()
+            .fetchSemanticsNode()
+            .boundsInRoot
+        val intervalBounds = composeRule
+            .onNodeWithTag(IntervalHandPaneTestTag, useUnmergedTree = true)
+            .assertIsDisplayed()
+            .fetchSemanticsNode()
+            .boundsInRoot
+        assertTrue(harmonyBounds.right <= intervalBounds.left)
+        assertTrue(harmonyBounds.width > 0f)
+        assertTrue(intervalBounds.width > harmonyBounds.width)
+        assertTrue(portraitDensity > 0f)
+        val minimumTargetPixels = 48f * portraitDensity
+
+        ChordLibrary.all.forEach { chord ->
+            composeRule.onNodeWithTag(chordChipTestTag(chord.id), useUnmergedTree = true)
+                .assertIsDisplayed()
+                .assertHasClickAction()
+        }
+        PerformanceIntervalSteps.forEach { steps ->
+            val padBounds = composeRule
+                .onNodeWithTag(intervalPadTestTag(steps), useUnmergedTree = true)
+                .assertIsDisplayed()
+                .fetchSemanticsNode()
+                .boundsInRoot
+            assertTrue(padBounds.left >= intervalBounds.left)
+            assertTrue(padBounds.right <= intervalBounds.right)
+            assertTrue(padBounds.width >= minimumTargetPixels)
+            assertTrue(padBounds.height >= minimumTargetPixels)
+        }
+        PadArticulation.entries.forEach { articulation ->
+            val articulationBounds = composeRule
+                .onNodeWithTag(articulationModeTestTag(articulation), useUnmergedTree = true)
+                .assertIsDisplayed()
+                .assertHasClickAction()
+                .fetchSemanticsNode()
+                .boundsInRoot
+            assertTrue(
+                "Portrait articulation $articulation width=${articulationBounds.width}px, minimum=${minimumTargetPixels}px",
+                articulationBounds.width >= minimumTargetPixels - 1f,
+            )
+            assertTrue(
+                "Portrait articulation $articulation height=${articulationBounds.height}px, minimum=${minimumTargetPixels}px",
+                articulationBounds.height >= minimumTargetPixels - 1f,
+            )
+        }
+        state.instrument.strumNotes().indices.forEach { index ->
+            val toneBounds = composeRule
+                .onNodeWithTag(strummerToneTestTag(index), useUnmergedTree = true)
+                .assertIsDisplayed()
+                .assertHasClickAction()
+                .fetchSemanticsNode()
+                .boundsInRoot
+            assertTrue(
+                "Portrait strummer tone $index width=${toneBounds.width}px, minimum=${minimumTargetPixels}px",
+                toneBounds.width >= minimumTargetPixels - 1f,
+            )
+            assertTrue(
+                "Portrait strummer tone $index height=${toneBounds.height}px, minimum=${minimumTargetPixels}px",
+                toneBounds.height >= minimumTargetPixels - 1f,
+            )
+        }
+    }
 
     @Test
     fun nineCompactDrawnPadsRemainDistinctAccessibleFortyEightDpTargets() {
@@ -158,8 +274,15 @@ class IntervalPadAccessibilityTest {
                 .assertIsDisplayed()
                 .assertHasClickAction()
                 .fetchSemanticsNode()
-            assertTrue(node.boundsInRoot.width >= 48f * density)
-            assertTrue(node.boundsInRoot.height >= 48f * density)
+            // Semantics bounds can round one physical pixel below the 48 dp layout constraint.
+            assertTrue(
+                "Strummer tone $index width=${node.boundsInRoot.width}px, minimum=${48f * density}px",
+                node.boundsInRoot.width >= 48f * density - 1f,
+            )
+            assertTrue(
+                "Strummer tone $index height=${node.boundsInRoot.height}px, minimum=${48f * density}px",
+                node.boundsInRoot.height >= 48f * density - 1f,
+            )
             assertTrue(node.config[SemanticsProperties.ContentDescription].any(String::isNotBlank))
         }
 

@@ -1,6 +1,7 @@
 package dev.intervaltablet
 
 import android.app.Application
+import android.os.Process
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.intervaltablet.audio.AudioDiagnostics
@@ -63,13 +64,16 @@ import dev.intervaltablet.midi.MidiRepositoryState
 import dev.intervaltablet.ui.ToneRowUiClockSource
 import dev.intervaltablet.ui.ToneRowUiIntent
 import dev.intervaltablet.ui.ToneRowUiPlaybackMode
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -148,16 +152,37 @@ private data class MidiLearnSuppressionLease(
     val ccThreshold: Int? = null,
 )
 
+/**
+ * The musical actor must not compete with Compose work on Dispatchers.Default. This owned
+ * single thread preserves FIFO ordering while Android's audio priority reduces scheduler delay
+ * between a touch callback and the native/MIDI enqueue. The actual audio callback remains Oboe's.
+ */
+private fun createMusicalActorDispatcher(): ExecutorCoroutineDispatcher {
+    return Executors.newSingleThreadExecutor { command ->
+        Thread(
+            {
+                runCatching { Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO) }
+                command.run()
+            },
+            "IntervalMusicalActor",
+        ).apply { isDaemon = true }
+    }.asCoroutineDispatcher()
+}
+
 class IntervalTabletViewModel @JvmOverloads constructor(
     application: Application,
     private val clock: MonotonicClock = SystemMonotonicClock,
     private val audioEngine: AudioMonitor = NativeAudioEngine(),
     midiRepositoryFactory: ((MidiPacketSink) -> MidiPortRepository)? = null,
     settingsStoreFactory: ((Application) -> SettingsStore)? = null,
-    private val actorDispatcher: CoroutineDispatcher = Dispatchers.Default.limitedParallelism(1),
+    actorDispatcher: CoroutineDispatcher? = null,
     private val persistenceDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val diagnosticsDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : AndroidViewModel(application) {
+    private val ownedActorDispatcher: ExecutorCoroutineDispatcher? =
+        if (actorDispatcher == null) createMusicalActorDispatcher() else null
+    private val musicalActorDispatcher: CoroutineDispatcher =
+        actorDispatcher ?: checkNotNull(ownedActorDispatcher)
     private val coordinator = PerformanceCoordinator()
     private val midiMappingEditorReducer = MidiMappingEditorReducer()
     private var performanceState = PerformanceCoordinatorState.initial()
@@ -224,7 +249,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
             )
 
     init {
-        viewModelScope.launch(actorDispatcher) {
+        viewModelScope.launch(musicalActorDispatcher) {
             for (command in mailbox) {
                 synchronized(actorGuard) {
                     if (!closing.get()) {
@@ -247,19 +272,19 @@ class IntervalTabletViewModel @JvmOverloads constructor(
                 persistenceSupervisor.complete()
             }
         }
-        viewModelScope.launch(actorDispatcher) {
+        viewModelScope.launch(musicalActorDispatcher) {
             midiRepository.state
                 .distinctUntilChangedBy(MidiRepositoryState::operationalKey)
                 .collect { state -> mailbox.send(MailboxCommand.MidiStateChanged(state)) }
         }
-        viewModelScope.launch(actorDispatcher) {
+        viewModelScope.launch(musicalActorDispatcher) {
             midiRepository.events.collect { event -> mailbox.send(MailboxCommand.MidiEventReceived(event)) }
         }
         viewModelScope.launch(persistenceDispatcher) {
             val stored = runCatching { settingsRepository.settings.first() }.getOrElse { StoredSettings() }
             mailbox.send(MailboxCommand.ApplyStoredSettings(stored))
         }
-        viewModelScope.launch(actorDispatcher) {
+        viewModelScope.launch(musicalActorDispatcher) {
             while (isActive) {
                 delay(DIAGNOSTICS_PERIOD_MILLIS)
                 requestDiagnosticsSample()
@@ -443,7 +468,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
     }
 
     private fun scheduleOneShotRelease(source: TriggerSource.System, durationMillis: Long) {
-        viewModelScope.launch(actorDispatcher) {
+        viewModelScope.launch(musicalActorDispatcher) {
             delay(durationMillis)
             enqueueControl(
                 MailboxCommand.Reduce(
@@ -478,7 +503,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
     private fun enqueueControl(command: MailboxCommand) {
         if (closing.get()) return
         if (mailbox.trySend(command).isSuccess) return
-        viewModelScope.launch(actorDispatcher) {
+        viewModelScope.launch(musicalActorDispatcher) {
             runCatching { mailbox.send(command) }
         }
     }
@@ -486,7 +511,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
     private fun scheduleOverflowRecovery() {
         if (closing.get()) return
         if (!overflowRecoveryQueued.compareAndSet(false, true)) return
-        viewModelScope.launch(actorDispatcher) {
+        viewModelScope.launch(musicalActorDispatcher) {
             runCatching { mailbox.send(MailboxCommand.RecoverFromOverflow(clock.nowNanos())) }
         }
     }
@@ -911,7 +936,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
         if (due == null) return
 
         val generation = internalClockGeneration
-        internalClockJob = viewModelScope.launch(actorDispatcher) {
+        internalClockJob = viewModelScope.launch(musicalActorDispatcher) {
             val remaining = due - clock.nowNanos()
             if (remaining > 0L) delay(ceilNanosToMillis(remaining))
             enqueueControl(MailboxCommand.InternalClockDue(generation, due))
@@ -1665,7 +1690,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
             is PerformanceEffect.Audio -> dispatchAudioEffect(effect)
             is PerformanceEffect.ReleaseAt -> {
                 toneRowReleaseJob?.cancel()
-                toneRowReleaseJob = viewModelScope.launch(actorDispatcher) {
+                toneRowReleaseJob = viewModelScope.launch(musicalActorDispatcher) {
                     val remainingNanos = effect.timestampNanos - clock.nowNanos()
                     if (remainingNanos > 0L) {
                         delay(ceilNanosToMillis(remainingNanos))
@@ -1892,6 +1917,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
         midiRepository.close()
         audioEngine.close()
         super.onCleared()
+        ownedActorDispatcher?.close()
     }
 
     private sealed interface MailboxCommand {

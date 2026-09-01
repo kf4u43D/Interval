@@ -17,8 +17,8 @@ android {
         applicationId = "dev.intervaltablet"
         minSdk = 29
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.2.1-dev"
+        versionCode = 4
+        versionName = "0.2.2-dev"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -58,6 +58,15 @@ android {
             versionNameSuffix = "-instrumented"
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += listOf("debug")
+        }
+        create("performance") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".performance"
+            versionNameSuffix = "-performance"
+            // Musicien-facing, coinstallable and locally signed: unlike `instrumented`, this
+            // variant keeps the optimized Kotlin/Compose and native Release paths.
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
         }
     }
 

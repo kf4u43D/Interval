@@ -117,7 +117,10 @@ class MidiMappingEditorAccessibilityTest {
 
         composeRule.onNodeWithTag(MidiMappingEditorTestTag).assertIsDisplayed()
         composeRule.onNodeWithTag(MidiMappingActionSelectorTestTag).assertIsEnabled()
-        composeRule.onNodeWithTag(MidiMappingLearnTestTag).assertIsEnabled().performClick()
+        composeRule.onNodeWithTag(MidiMappingLearnTestTag)
+            .performScrollTo()
+            .assertIsEnabled()
+            .performClick()
         composeRule.onNodeWithTag(MidiMappingActionSelectorTestTag).assertIsNotEnabled()
         composeRule.onNodeWithTag(MidiMappingSaveTestTag).assertIsNotEnabled()
 

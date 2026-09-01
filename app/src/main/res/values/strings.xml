@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Interval Tablet V2</string>
+    <string name="app_name">Interval Tablet V2.2</string>
     <string name="performance_note">Note</string>
     <string name="performance_degree">Degré</string>
     <string name="performance_chromatic_anchor">Ancre chromatique</string>
@@ -9,6 +9,8 @@
     <string name="performance_chord">Accord</string>
     <string name="performance_chord_variants">Variantes d’accords</string>
     <string name="performance_scales">Gammes</string>
+    <string name="performance_left_hand_harmony">Main gauche · Harmonie</string>
+    <string name="performance_right_hand_intervals">Main droite · Intervalles</string>
     <string name="performance_force_to_scale">Force to Scale</string>
     <string name="performance_articulation_arpeggiated">Arpégé</string>
     <string name="performance_articulation_stacked">Plaqué</string>

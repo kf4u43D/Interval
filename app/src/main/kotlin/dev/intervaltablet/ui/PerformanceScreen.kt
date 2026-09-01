@@ -96,6 +96,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.intervaltablet.AppUiState
 import dev.intervaltablet.R
@@ -131,6 +132,8 @@ private val IntervalRows: List<List<Int>> = PerformanceIntervalSteps.chunked(3)
 internal const val SynthPanelOpenTestTag: String = "synth-panel:open"
 internal const val SynthPanelTestTag: String = "synth-panel"
 internal const val ForceToScaleTestTag: String = "force-to-scale"
+internal const val HarmonyHandPaneTestTag: String = "two-hand:harmony-left"
+internal const val IntervalHandPaneTestTag: String = "two-hand:intervals-right"
 internal const val SynthCutoffUiMaximumHz: Float = 20_000f
 internal fun synthSliderTestTag(key: String): String = "synth-slider:$key"
 internal fun scaleChipTestTag(scaleId: String): String = "scale-chip:$scaleId"
@@ -314,13 +317,6 @@ internal fun ProjectedPerformanceScreen(
             }
         }
     }
-    val openQuickConsole = remember {
-        {
-            toneRowArrangementOpen = false
-            synthOpen = false
-            consoleOpen = true
-        }
-    }
     val openArrangement = remember {
         {
             consoleOpen = false
@@ -354,7 +350,7 @@ internal fun ProjectedPerformanceScreen(
                 .background(stageBackground),
         ) {
             val compact = maxWidth < 1_040.dp || maxHeight < 640.dp
-            val horizontalStrummer = maxHeight > maxWidth
+            val portraitTwoHanded = maxHeight > maxWidth
             val availableWidth = maxWidth
             val outerPadding = if (compact) 8.dp else 12.dp
             val sectionGap = if (compact) 7.dp else 10.dp
@@ -379,59 +375,50 @@ internal fun ProjectedPerformanceScreen(
                     onOpenArrangement = openArrangement,
                 )
 
-                ProjectedHarmonySurface(
-                    state = projections.controls,
-                    onSetScale = onSetScale,
-                    onSetChord = onSetChord,
-                    onSetForceToScale = onSetForceToScale,
-                )
-
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     StageBackdrop(Modifier.fillMaxSize())
-                    if (horizontalStrummer) {
-                        Column(
+                    if (portraitTwoHanded) {
+                        TwoHandedPortraitStage(
+                            projections = projections,
+                            compact = compact,
+                            sectionGap = sectionGap,
+                            onSetScale = onSetScale,
+                            onSetChord = onSetChord,
+                            onSetForceToScale = onSetForceToScale,
+                            onSetPadArticulation = onSetPadArticulation,
+                            onStrumTone = onStrumTone,
+                            onHome = onHome,
+                            onUndo = onUndo,
+                            onPanic = onPanic,
+                            onIntervalDown = onIntervalDown,
+                            onIntervalUp = onIntervalUp,
+                            onIntervalOneShot = onIntervalOneShot,
                             modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(sectionGap),
-                        ) {
-                            Box(
-                                modifier = Modifier.weight(1f).fillMaxWidth(),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(sectionGap),
-                                ) {
-                                    ProjectedUtilityRail(
-                                        state = projections.utility,
-                                        compact = compact,
-                                        onHome = onHome,
-                                        onUndo = onUndo,
-                                        onPanic = onPanic,
-                                        modifier = Modifier.width(104.dp).fillMaxHeight(),
-                                    )
-                                    ProjectedIntervalGrid(
-                                        pads = projections.pads,
-                                        compact = compact,
-                                        onDown = onIntervalDown,
-                                        onUp = onIntervalUp,
-                                        onOneShot = onIntervalOneShot,
-                                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                                    )
-                                }
-                            }
-                            ProjectedStrummerLane(
-                                state = projections.articulation,
-                                orientation = StrummerOrientation.HORIZONTAL,
-                                onSetArticulation = onSetPadArticulation,
-                                onStrumTone = onStrumTone,
-                                modifier = Modifier.fillMaxWidth().height(132.dp),
-                            )
-                        }
+                        )
                     } else {
                         Row(
                             modifier = Modifier.fillMaxSize(),
                             horizontalArrangement = Arrangement.spacedBy(sectionGap),
                         ) {
+                            ProjectedHarmonySurface(
+                                state = projections.controls,
+                                onSetScale = onSetScale,
+                                onSetChord = onSetChord,
+                                onSetForceToScale = onSetForceToScale,
+                                portraitTwoHanded = true,
+                                chordColumns = 5,
+                                modifier = Modifier
+                                    .width(if (compact) 268.dp else 360.dp)
+                                    .fillMaxHeight()
+                                    .testTag(HarmonyHandPaneTestTag),
+                            )
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .testTag(IntervalHandPaneTestTag),
+                                horizontalArrangement = Arrangement.spacedBy(sectionGap),
+                            ) {
                             ProjectedUtilityRail(
                                 state = projections.utility,
                                 compact = compact,
@@ -459,16 +446,6 @@ internal fun ProjectedPerformanceScreen(
                                     .width(if (compact) 88.dp else 112.dp)
                                     .fillMaxHeight(),
                             )
-                            if (!compact) {
-                                ProjectedQuickControls(
-                                    state = projections.controls,
-                                    onSetChord = onSetChord,
-                                    onSetMode = onSetMode,
-                                    onToggleAudio = onToggleAudio,
-                                    onOpenSynth = openSynth,
-                                    onOpenConsole = openQuickConsole,
-                                    modifier = Modifier.width(224.dp).fillMaxHeight(),
-                                )
                             }
                         }
                     }
@@ -637,39 +614,14 @@ private fun ProjectedStrummerLane(
 }
 
 @Composable
-private fun ProjectedQuickControls(
-    state: State<PerformanceControlsUiState>,
-    onSetChord: (ChordDefinition) -> Unit,
-    onSetMode: (PassThroughMode) -> Unit,
-    onToggleAudio: () -> Unit,
-    onOpenSynth: () -> Unit,
-    onOpenConsole: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val controls = state.value
-    QuickControls(
-        chord = controls.chord,
-        mode = controls.mode,
-        audioMonitorEnabled = controls.audioMonitorEnabled,
-        audioAvailable = controls.audioAvailable,
-        audioRunning = controls.audioRunning,
-        performanceLock = controls.performanceLock,
-        synthEnabled = controls.settingsLoaded,
-        onSetChord = onSetChord,
-        onSetMode = onSetMode,
-        onToggleAudio = onToggleAudio,
-        onOpenSynth = onOpenSynth,
-        onOpenConsole = onOpenConsole,
-        modifier = modifier,
-    )
-}
-
-@Composable
 private fun ProjectedHarmonySurface(
     state: State<PerformanceControlsUiState>,
     onSetScale: (ScaleDefinition) -> Unit,
     onSetChord: (ChordDefinition) -> Unit,
     onSetForceToScale: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    portraitTwoHanded: Boolean = false,
+    chordColumns: Int = 2,
 ) {
     val controls = state.value
     HarmonySurface(
@@ -680,7 +632,102 @@ private fun ProjectedHarmonySurface(
         onSetScale = onSetScale,
         onSetChord = onSetChord,
         onSetForceToScale = onSetForceToScale,
+        portraitTwoHanded = portraitTwoHanded,
+        chordColumns = chordColumns,
+        modifier = modifier,
     )
+}
+
+@Composable
+private fun TwoHandedPortraitStage(
+    projections: PerformanceUiProjections,
+    compact: Boolean,
+    sectionGap: Dp,
+    onSetScale: (ScaleDefinition) -> Unit,
+    onSetChord: (ChordDefinition) -> Unit,
+    onSetForceToScale: (Boolean) -> Unit,
+    onSetPadArticulation: (PadArticulation) -> Unit,
+    onStrumTone: (toneIndex: Int, velocity: Int) -> Unit,
+    onHome: () -> Unit,
+    onUndo: () -> Unit,
+    onPanic: () -> Unit,
+    onIntervalDown: (pointerId: Long, steps: Int) -> Unit,
+    onIntervalUp: (pointerId: Long) -> Unit,
+    onIntervalOneShot: (steps: Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(sectionGap),
+    ) {
+        Column(
+            modifier = Modifier
+                .weight(0.43f)
+                .fillMaxHeight()
+                .testTag(HarmonyHandPaneTestTag),
+            verticalArrangement = Arrangement.spacedBy(sectionGap),
+        ) {
+            ProjectedHarmonySurface(
+                state = projections.controls,
+                onSetScale = onSetScale,
+                onSetChord = onSetChord,
+                onSetForceToScale = onSetForceToScale,
+                portraitTwoHanded = true,
+                chordColumns = 2,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            )
+            ProjectedStrummerLane(
+                state = projections.articulation,
+                orientation = StrummerOrientation.HORIZONTAL,
+                onSetArticulation = onSetPadArticulation,
+                onStrumTone = onStrumTone,
+                modifier = Modifier.fillMaxWidth().height(172.dp),
+            )
+        }
+
+        Surface(
+            modifier = Modifier
+                .weight(0.57f)
+                .fillMaxHeight()
+                .testTag(IntervalHandPaneTestTag),
+            shape = StageShape,
+            color = MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.90f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    stringResource(R.string.performance_right_hand_intervals).uppercase(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Black,
+                )
+                Row(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 9.dp),
+                ) {
+                    ProjectedUtilityRail(
+                        state = projections.utility,
+                        compact = true,
+                        onHome = onHome,
+                        onUndo = onUndo,
+                        onPanic = onPanic,
+                        modifier = Modifier.width(76.dp).fillMaxHeight(),
+                    )
+                    ProjectedIntervalGrid(
+                        pads = projections.pads,
+                        compact = compact,
+                        onDown = onIntervalDown,
+                        onUp = onIntervalUp,
+                        onOneShot = onIntervalOneShot,
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -1156,48 +1203,55 @@ private fun ArticulationSelector(
         modifier = modifier.selectableGroup(),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        PadArticulation.entries.forEach { articulation ->
-            val isSelected = articulation == selected
-            val label = articulationLabel(articulation)
-            val description = articulationDescription(articulation)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp)
-                    .background(
-                        color = if (isSelected) {
-                            MaterialTheme.colorScheme.primaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.surfaceContainerHigh
-                        },
-                        shape = ControlShape,
-                    )
-                    .selectable(
-                        selected = isSelected,
-                        role = Role.RadioButton,
-                        onClick = { currentOnSelect.value(articulation) },
-                    )
-                    .semantics {
-                        contentDescription = description
-                        this.selected = isSelected
-                    }
-                    .testTag(articulationModeTestTag(articulation))
-                    .padding(horizontal = 4.dp, vertical = 3.dp),
-                contentAlignment = Alignment.Center,
+        PadArticulation.entries.toList().chunked(2).forEach { articulations ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                Text(
-                    text = label.uppercase(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (isSelected) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                articulations.forEach { articulation ->
+                    val isSelected = articulation == selected
+                    val label = articulationLabel(articulation)
+                    val description = articulationDescription(articulation)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp)
+                            .background(
+                                color = if (isSelected) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceContainerHigh
+                                },
+                                shape = ControlShape,
+                            )
+                            .selectable(
+                                selected = isSelected,
+                                role = Role.RadioButton,
+                                onClick = { currentOnSelect.value(articulation) },
+                            )
+                            .semantics {
+                                contentDescription = description
+                                this.selected = isSelected
+                            }
+                            .testTag(articulationModeTestTag(articulation))
+                            .padding(horizontal = 3.dp, vertical = 3.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = label.uppercase(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isSelected) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
             }
         }
     }
@@ -1687,170 +1741,150 @@ private fun HarmonySurface(
     onSetScale: (ScaleDefinition) -> Unit,
     onSetChord: (ChordDefinition) -> Unit,
     onSetForceToScale: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    portraitTwoHanded: Boolean = false,
+    chordColumns: Int = 2,
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = ControlShape,
         color = MaterialTheme.colorScheme.surfaceContainer,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+            modifier = (if (portraitTwoHanded) Modifier.fillMaxSize() else Modifier.fillMaxWidth())
+                .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
+            if (portraitTwoHanded) {
+                Text(
+                    stringResource(R.string.performance_left_hand_harmony).uppercase(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.secondary,
+                    fontWeight = FontWeight.Black,
+                )
+                ChoiceSelector(
+                    label = stringResource(R.string.performance_scales),
+                    selected = scale,
+                    options = ScaleLibrary.all,
+                    optionLabel = { it.displayName },
+                    onSelect = onSetScale,
+                    enabled = enabled,
+                    compact = true,
+                    testTag = scaleChipTestTag(scale.id),
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 FilterChip(
                     selected = forceToScale,
                     onClick = { onSetForceToScale(!forceToScale) },
                     enabled = enabled,
-                    modifier = Modifier.heightIn(min = 48.dp).testTag(ForceToScaleTestTag),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .testTag(ForceToScaleTestTag),
                     label = { Text(stringResource(R.string.performance_force_to_scale)) },
                 )
                 Text(
-                    stringResource(R.string.performance_scales).uppercase(),
+                    stringResource(R.string.performance_chord_variants).uppercase(),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.Bold,
                 )
-                LazyRow(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    items(ScaleLibrary.all, key = ScaleDefinition::id) { option ->
-                        FilterChip(
-                            selected = option == scale,
-                            onClick = { onSetScale(option) },
-                            enabled = enabled,
-                            modifier = Modifier
-                                .heightIn(min = 48.dp)
-                                .testTag(scaleChipTestTag(option.id)),
-                            label = { Text(option.displayName, maxLines = 1) },
-                        )
+                ChordLibrary.all.chunked(chordColumns).forEach { options ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        options.forEach { option ->
+                            FilterChip(
+                                selected = option == chord,
+                                onClick = { onSetChord(option) },
+                                enabled = enabled,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .heightIn(min = 48.dp)
+                                    .testTag(chordChipTestTag(option.id)),
+                                label = {
+                                    Text(
+                                        option.displayName,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                },
+                            )
+                        }
                     }
                 }
-            }
-            Text(
-                stringResource(R.string.performance_chord_variants).uppercase(),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.Bold,
-            )
-            ChordLibrary.all.chunked(5).forEach { options ->
+            } else {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    options.forEach { option ->
-                        FilterChip(
-                            selected = option == chord,
-                            onClick = { onSetChord(option) },
-                            enabled = enabled,
-                            modifier = Modifier
-                                .weight(1f)
-                                .heightIn(min = 48.dp)
-                                .testTag(chordChipTestTag(option.id)),
-                            label = {
-                                Text(
-                                    option.displayName,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            },
-                        )
+                    FilterChip(
+                        selected = forceToScale,
+                        onClick = { onSetForceToScale(!forceToScale) },
+                        enabled = enabled,
+                        modifier = Modifier.heightIn(min = 48.dp).testTag(ForceToScaleTestTag),
+                        label = { Text(stringResource(R.string.performance_force_to_scale)) },
+                    )
+                    Text(
+                        stringResource(R.string.performance_scales).uppercase(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    LazyRow(
+                        modifier = Modifier.weight(1f),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        items(ScaleLibrary.all, key = ScaleDefinition::id) { option ->
+                            FilterChip(
+                                selected = option == scale,
+                                onClick = { onSetScale(option) },
+                                enabled = enabled,
+                                modifier = Modifier
+                                    .heightIn(min = 48.dp)
+                                    .testTag(scaleChipTestTag(option.id)),
+                                label = { Text(option.displayName, maxLines = 1) },
+                            )
+                        }
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun QuickControls(
-    chord: ChordDefinition,
-    mode: PassThroughMode,
-    audioMonitorEnabled: Boolean,
-    audioAvailable: Boolean,
-    audioRunning: Boolean,
-    performanceLock: Boolean,
-    synthEnabled: Boolean,
-    onSetChord: (ChordDefinition) -> Unit,
-    onSetMode: (PassThroughMode) -> Unit,
-    onToggleAudio: () -> Unit,
-    onOpenSynth: () -> Unit,
-    onOpenConsole: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.94f),
-        shape = StageShape,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(9.dp),
-        ) {
-            Text(
-                stringResource(R.string.configuration_instrument).uppercase(),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.Bold,
-            )
-            ChoiceSelector(
-                label = stringResource(R.string.performance_chord),
-                selected = chord,
-                options = ChordLibrary.all,
-                optionLabel = { it.displayName },
-                onSelect = onSetChord,
-            )
-            ChoiceSelector(
-                label = stringResource(R.string.performance_routing),
-                selected = mode,
-                options = PassThroughMode.entries,
-                optionLabel = { modeLabel(it) },
-                onSelect = onSetMode,
-            )
-            FilterChip(
-                selected = audioMonitorEnabled,
-                onClick = onToggleAudio,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
-                label = {
-                    Text(
-                        audioLabel(audioAvailable = audioAvailable, audioRunning = audioRunning),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-            )
-            Spacer(Modifier.weight(1f))
-            if (!performanceLock) {
-                OutlinedButton(
-                    onClick = onOpenSynth,
-                    enabled = synthEnabled,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
-                    shape = ControlShape,
-                ) {
-                    Text(stringResource(R.string.performance_open_synth))
-                }
-                OutlinedButton(
-                    onClick = onOpenConsole,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
-                    shape = ControlShape,
-                ) {
-                    Text(stringResource(R.string.performance_open_console))
-                }
-            } else {
                 Text(
-                    stringResource(R.string.performance_locked),
-                    modifier = Modifier.padding(8.dp),
-                    style = MaterialTheme.typography.labelMedium,
+                    stringResource(R.string.performance_chord_variants).uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.Bold,
                 )
+                ChordLibrary.all.chunked(5).forEach { options ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        options.forEach { option ->
+                            FilterChip(
+                                selected = option == chord,
+                                onClick = { onSetChord(option) },
+                                enabled = enabled,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 48.dp)
+                                    .testTag(chordChipTestTag(option.id)),
+                                label = {
+                                    Text(
+                                        option.displayName,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                },
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -2876,12 +2910,18 @@ private fun <T> ChoiceSelector(
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
+    enabled: Boolean = true,
+    testTag: String? = null,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box(modifier = modifier) {
         OutlinedButton(
             onClick = { expanded = true },
-            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+            enabled = enabled,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = if (compact) 48.dp else 56.dp)
+                .then(if (testTag == null) Modifier else Modifier.testTag(testTag)),
             shape = ControlShape,
         ) {
             Column(Modifier.fillMaxWidth()) {
@@ -2903,7 +2943,8 @@ private fun <T> ChoiceSelector(
             options.forEach { option ->
                 DropdownMenuItem(
                     text = { Text(optionLabel(option)) },
-                    modifier = Modifier.heightIn(min = 56.dp),
+                    modifier = Modifier.heightIn(min = if (compact) 48.dp else 56.dp),
+                    enabled = enabled,
                     onClick = {
                         expanded = false
                         onSelect(option)
