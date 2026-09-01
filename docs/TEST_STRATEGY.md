@@ -123,6 +123,24 @@ Ces tests instrumentés sont requis pour la réception matérielle. Ils ne sont 
   `SynthPanelAccessibilityTest` couvre les contrôles, l'ordre aperçu/commit, le temps et
   le feedback du delay, ainsi que les diagnostics exposés par Compose.
 
+## État de preuve du lot V2.2
+
+- `IntervalPadAccessibilityTest` force une fenêtre portrait 900 × 1 440 dp, prouve que
+  l’harmonie est entièrement à gauche des intervalles, que le panneau droit est plus large
+  et que les dix accords, neuf pads, articulations et cordes sont affichés avec des cibles
+  d’au moins 48 dp.
+- Le scénario paysage vérifie séparément les cibles du strummer. La correction fait passer
+  la hauteur fautive observée de 22 dp à au moins 48 dp et laisse MIDI Learn accessible.
+- La suite instrumentée complète réussit 8/8 sur SM-X620/API 36. Les gates conservent
+  136/136 tests domaine, 161/161 application, CTest 2/2 et ajoutent le cinquième Lint de
+  la variante Performance, tous sans issue.
+- La variante `performance` est assemblée/minifiée, installée, compilée AOT `speed` et
+  vérifiée en présence de la seule V1. Un stress contrôlé de 108 frappes collecte
+  `gfxinfo`, puis le panneau Synthé confirme les diagnostics audio négociés.
+- La baseline V2.1 cumulative et la fenêtre V2.2 contrôlée ne sont pas assimilées à une
+  expérience A/B stricte. Elles suffisent à vérifier la disparition de la régression
+  grossière d’entrée, pas à certifier la latence acoustique.
+
 ## État de preuve du lot V2.1
 
 - `ForceToScaleTest` couvre le catalogue de treize gammes, la quantification chromatique,

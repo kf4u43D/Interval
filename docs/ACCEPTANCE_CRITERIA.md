@@ -243,3 +243,29 @@ CV, réseau, Scala, microtonalité, MPE et MIDI 2.0 restent hors périmètre.
 
 Les périphériques USB MIDI réels, TalkBack, vrai multi-touch, 90 Hz soutenu, loopback,
 hotplug et soak audio restent des validations matérielles distinctes.
+
+## Porte 6 — V2.2 ergonomie deux mains et faible latence
+
+### Critères logiciels et tablette
+
+- [x] En portrait 900 × 1 440 dp, l’harmonie/les accords occupent le panneau gauche et
+  les neuf intervalles le panneau droit, plus large ; la disposition reste latérale en
+  paysage.
+- [x] Les dix accords, les neuf pads, toutes les articulations et les cordes visibles
+  conservent des cibles tactiles d’au moins 48 dp ; le strummer n’est plus comprimé à
+  22 dp et MIDI Learn reste accessible.
+- [x] La V2.2 de jeu utilise le package `dev.intervaltablet.performance`, la version
+  `0.2.2-dev-performance`, R8, le moteur natif Release et une compilation AOT `speed` ;
+  la V1 `dev.intervaltablet.debug` reste installée.
+- [x] L’acteur musical possède un thread mono-thread fermé avec le ViewModel et placé à
+  priorité Android audio, sans changer la machine d’état FIFO ni l’ownership des notes.
+- [x] Le gate réussit 136/136 tests domaine, 161/161 application, 8/8 instrumentés,
+  CTest 2/2, cinq Lint sans issue, tous les assemblages et le contrôle des quatre ABI.
+- [x] Sur le stress de 108 frappes, p90 est à 17 ms et les signaux `High input latency`
+  sont 12/121 ; le diagnostic audio reste à 48 kHz, burst 96, buffer 192, avec zéro xrun
+  et zéro événement perdu.
+- [x] Après réception, seules la dernière V1 et la V2.2 Performance restent installées ;
+  les APK/packages de test et fichiers XML temporaires sont retirés.
+
+Le scénario `gfxinfo` ne clôt pas la mesure loopback tactile/MIDI→audio. MIDI USB réel,
+TalkBack, vrai multi-touch, 90 Hz soutenu, hotplug et soak audio restent ouverts.

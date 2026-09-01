@@ -2,7 +2,7 @@
 
 ## Proposition
 
-Interval Tablet transforme une tablette Android en instrument de composition et performance fondé sur la navigation par intervalles diatoniques. L’utilisateur ne choisit pas d’abord une note absolue : il déplace un curseur dans une gamme avec neuf actions rapides, répète un déplacement ou un écart de hauteur, choisit si les pads jouent le lead, plaquent le voicing ou restent muets, puis peut égrener ce voicing avec un strummer. Il enregistre aussi une série, la transforme et l’envoie vers des instruments MIDI externes. Un éditeur MIDI Learn permet d’assigner Notes et CC sans quitter la tablette. Un synthé interne léger permet de jouer sans autre générateur sonore.
+Interval Tablet transforme une tablette Android en instrument de composition et performance fondé sur la navigation par intervalles diatoniques. L’utilisateur ne choisit pas d’abord une note absolue : il déplace un curseur dans une gamme avec neuf actions rapides, répète un déplacement ou un écart de hauteur, choisit si les pads jouent le lead, plaquent le voicing ou restent muets, puis peut égrener ce voicing avec un strummer. La scène se joue à deux mains, harmonie et accords à gauche, intervalles à droite. Il enregistre aussi une série, la transforme et l’envoie vers des instruments MIDI externes. Un éditeur MIDI Learn permet d’assigner Notes et CC sans quitter la tablette. Un synthé interne léger permet de jouer sans autre générateur sonore.
 
 ## Utilisateurs cibles
 
@@ -15,7 +15,8 @@ Interval Tablet transforme une tablette Android en instrument de composition et 
 1. **Fiabilité MIDI** : routage prévisible, notes actives maîtrisées, hotplug et Panic.
 2. **Fidélité de jeu** : intervalles, Tone Row, transformations, accords et transport.
 3. **Contrôle assignable** : apprentissage MIDI transactionnel, prévisible et annulable.
-4. **Lisibilité scénique** : interaction paysage, gros contrôles, peu de menus pendant le jeu.
+4. **Lisibilité scénique** : disposition deux mains portrait/paysage, contrôles tactiles
+   accessibles et peu de menus pendant le jeu.
 5. **Autonomie sonore** : synthèse soustractive efficace, sans devenir un workstation.
 
 ## Principes produit

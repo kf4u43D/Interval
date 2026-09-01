@@ -330,6 +330,39 @@ vrai multi-touch et TalkBack, écoute comparative/loopback, hotplug audio et soa
 Les validations USB MIDI réel, TalkBack, vrai multi-touch, 90 Hz soutenu, loopback,
 hotplug et soak audio restent ouvertes sans bloquer cette livraison logicielle.
 
+## Étape 6 — V2.2 ergonomie deux mains et faible latence
+
+**V2.2 logicielle terminée, installée et reçue sur SM-X620 le 1er septembre 2026.**
+
+- [x] Portrait divisé à 43/57 : harmonie, Force to Scale, dix accords et strummer à
+  gauche ; Home/Undo/Panic et grille 3×3 à droite. Le paysage reprend cette séparation
+  latérale afin de préserver la hauteur de jeu.
+- [x] Articulations en grille 2×2 et cibles de pads/accords/articulations/cordes à 48 dp
+  minimum ; la hauteur fautive du strummer passe de 22 dp à au moins 48 dp.
+- [x] Acteur musical possédé par le ViewModel sur thread mono-thread nommé à priorité
+  Android audio, fermeture déterministe et dispatcher de test toujours injectable.
+- [x] Variante `performance` minifiée, moteur natif Release, package
+  `dev.intervaltablet.performance`, version `0.2.2-dev-performance`, signature locale et
+  compilation ART `speed`.
+- [x] Gate : 136/136 domaine sur 12 suites, 161/161 application sur 19 suites, 8/8
+  instrumentés, CTest 2/2, cinq Lint sans issue, tous les assemblages et quatre ABI.
+- [x] Stress SM-X620 de 108 frappes : p50 14 ms, p90 17 ms, p95 18 ms, p99 19 ms et
+  12/121 signaux `High input latency`, contre p90 24 ms et 901/1 777 dans la baseline
+  V2.1 cumulative. Le moteur reste à 48 kHz, burst 96, buffer 192, queue 0/16, zéro
+  xrun/drop/reprise/erreur.
+- [x] Seules la V1 `dev.intervaltablet.debug` et la V2.2
+  `dev.intervaltablet.performance` restent sur la tablette ; fichiers de diagnostic et
+  packages de test retirés.
+
+Commit d’implémentation vérifié :
+`9255a8309f674247565d270231a9abee445a09c8`.
+APK Performance final : 9 227 116 octets, SHA-256
+`CD708425DEC4671AD3DAC43F5B699A8C3FB9EE555DF994A79030231F33E7AE14`.
+
+La baisse des symptômes d’entrée Android ferme la régression grossière signalée, mais
+`gfxinfo` ne mesure pas le délai acoustique. Loopback tactile/MIDI→audio, MIDI USB réel,
+vrai multi-touch, TalkBack, rendu soutenu à 90 Hz, hotplug et soak restent ouverts.
+
 ## Dépôt
 
 Le workspace est un dépôt Git local sur `main` avec le Wrapper Gradle officiel 8.13 et son

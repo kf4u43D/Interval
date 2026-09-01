@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "currentStage": 5,
+  "currentStage": 6,
   "status": "complete",
-  "lastVerifiedCommit": "61a71509dc15342edc3901fb6afb73103d7046f8",
-  "currentLot": "v2-1-stage5-complete",
+  "lastVerifiedCommit": "9255a8309f674247565d270231a9abee445a09c8",
+  "currentLot": "v2-2-stage6-complete",
   "completedAt": "2026-09-01",
   "lastSoftwareGate": {
     "date": "2026-09-01",
@@ -17,13 +17,15 @@
     "errors": 0,
     "skipped": 0,
     "nativeSuites": 2,
-    "instrumentedTests": 7,
-    "instrumentedDurationSeconds": 17.279,
+    "instrumentedTests": 8,
+    "instrumentedDurationSeconds": 24.883,
     "lintDebugIssues": 0,
     "lintInstrumentedIssues": 0,
     "lintReleaseIssues": 0,
     "lintBenchmarkIssues": 0,
+    "lintPerformanceIssues": 0,
     "benchmarkAssembled": true,
+    "performanceAssembled": true,
     "benchmarkSmoke": false,
     "apkNativeRuntimeCheck": true
   },
@@ -35,6 +37,10 @@
     "compactPerformancePads": true,
     "chordSurface": true,
     "forceToScaleUi": true,
+    "twoHandPortraitUi": true,
+    "twoHandLandscapeUi": true,
+    "optimizedPerformanceInstall": true,
+    "coarseInputLatencyRegressionFixed": true,
     "audioNominalLifecycleCycles": 10,
     "usbMidi": false,
     "usbMidiInput": false,
@@ -42,6 +48,7 @@
     "sustained90Hz": false,
     "audioSubjective": false,
     "audioSoak": false,
-    "continuousSynthControlUserAccepted": true
+    "continuousSynthControlUserAccepted": true,
+    "touchToAudioLoopback": false
   }
 }

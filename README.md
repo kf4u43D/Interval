@@ -22,13 +22,16 @@ Le comportement cible est documenté à partir des fonctions observables décrit
 - Horloge MIDI **entrante**, Start, Stop et Continue.
 - Synthèse interne optionnelle : patch typé de 16 paramètres, oscillateurs soustractifs,
   filtre, ADSR, chorus, temps/feedback/mix du delay, réverbération et panneau non modal.
-- Interface portrait/paysage adaptée à une tablette 10–11 pouces, avec pads compacts et
-  les dix variantes d’accords accessibles sur la page principale.
+- Interface deux mains adaptée à une tablette 10–11 pouces : harmonie/accords à gauche,
+  intervalles à droite en portrait comme en paysage, avec les dix variantes d’accords
+  accessibles sur la page principale.
+- Variante V2.2 Performance minifiée et coinstallable avec la V1, acteur musical dédié
+  à priorité audio et moteur natif Release.
 
 Rest, Random Step et Ratchet dans la séquence, l'horloge/transport MIDI sortants, Song
 Position Pointer, le catalogue étendu d'actions mappables, les gammes personnalisées,
 les scopes de presets étendus et l'optimisation soutenue à 90 Hz restent différés après
-cette V2.1. CV, USB audio
+cette V2.2. CV, USB audio
 multicanal, Wi‑Fi/RTP-MIDI, Ableton Link, Bluetooth MIDI, Scala/MPE/MIDI 2.0 et
 microtonalité restent hors périmètre.
 
@@ -73,6 +76,7 @@ Sous Windows PowerShell :
    - `codex/prompts/03_audio_ui_hardening.md`
    - `codex/prompts/04_v2_performance_midi_learn.md`
    - `codex/prompts/05_v2_1_performance_surface.md`
+   - `codex/prompts/06_v2_2_two_hand_low_latency.md`
 3. Utiliser le lanceur d'étape correspondant pour exécuter un seul lot en mode écriture
    contrôlé.
 
@@ -85,11 +89,12 @@ L’état du programme de développement est conservé dans `.codex/state.json` 
 - `app/src/main/cpp/` : moteur temps réel Oboe et DSP sans allocation dans le callback.
 - `native-tests/` : tests DSP compilables sur l’hôte sans SDK Android.
 - `docs/` : spécifications, traçabilité du guide, protocole matériel, architecture et validation.
-- `codex/prompts/` : cinq lots autonomes et significatifs.
+- `codex/prompts/` : six lots autonomes et significatifs.
 
 ## État d'implémentation
 
-Les trois étapes du **MVP logiciel**, l'étape 4 de la **V2** et l'étape 5 de la **V2.1**
+Les trois étapes du **MVP logiciel**, l'étape 4 de la **V2**, l'étape 5 de la **V2.1**
+et l'étape 6 de la **V2.2**
 sont terminées depuis le 1er septembre 2026. La certification matérielle étendue reste
 partielle et séparée de
 cette clôture. Les neuf actions tactiles
@@ -121,6 +126,12 @@ nom « Interval Tablet V2 », les pads portrait sont plus compacts, les dix acco
 affichés en deux rangées et les gammes standards se sélectionnent sur la scène. Force to
 Scale quantifie les notes générées vers la gamme active, sans altérer le MIDI PassThru.
 Le panneau Synthé expose séparément temps, feedback et mix du delay.
+
+La V2.2 organise le jeu à deux mains : harmonie, Force to Scale, accords et strummer à
+gauche ; utilitaires et neuf intervalles à droite. Le paysage reprend cette séparation
+latérale pour ne plus écraser le strummer. L’application de jeu est désormais la variante
+optimisée `dev.intervaltablet.performance`, tandis que l’acteur musical possède un thread
+mono-thread à priorité audio indépendant du rendu Compose.
 
 La session de travail et une banque interne de 128 presets sont persistées avec migration
 de schéma. Program Change rappelle le slot zéro-based correspondant sur le canal d'entrée
@@ -172,12 +183,21 @@ module de référence. Les écarts et preuves sont suivis dans
 ## Vérification livrée
 
 Les validations reproductibles sont décrites dans `docs/VERIFICATION_REPORT.md`. Le gate
+V2.2 du 1er septembre 2026 réussit **136 tests domaine, 161 tests application et 8 tests
+instrumentés**, CTest 2/2, cinq Lint sans issue et tous les assemblages. Sur SM-X620, un
+stress de 108 frappes donne p90 17 ms et 12 signaux de forte latence d’entrée sur 121
+frames, contre p90 24 ms et 901/1 777 dans la baseline V2.1 cumulative. Le moteur reste à
+48 kHz, burst 96, buffer 192, avec zéro xrun et zéro événement perdu. Cette campagne
+n’est pas une mesure loopback tactile→audio.
+
+Le gate
 V2.1 du 1er septembre 2026 réussit **136 tests domaine sur 12 suites et 161 tests
 application sur 19 suites, soit 297/297**, CTest 2/2, quatre Lint sans issue, tous les
 assemblages et le contrôle des runtimes natifs sur quatre ABI. La réception directe
 SM-X620/API 36 réussit 7/7 en 17,279 s et vérifie notamment les dix accords visibles,
-Force to Scale, les pads compacts et les gestes temps/feedback du delay. La tablette ne
-conserve que la V1 `0.1.0-dev-debug` et la V2.1 `0.2.1-dev-instrumented`.
+Force to Scale, les pads compacts et les gestes temps/feedback du delay. À l’issue de
+cette réception historique, seules V1 et V2.1 restaient installées ; la réception V2.2
+ci-dessus remplace cet état matériel.
 
 Le gate
 V2 final du 1er septembre 2026, associé au commit vérifié

@@ -6,15 +6,53 @@ Dates de référence : **20 août 2026** pour la clôture historique des portes 
 de paramètres/panneau Synthé avec validation du stream réel, **31 août 2026** pour la
 revalidation Wi-Fi et le correctif de packaging Oboe, puis **1er septembre 2026** pour le
 suivi continu des sliders Synthé, la clôture du MVP, le gate final Stage 4/V2 et la
-réception Stage 5/V2.1.
+réception Stage 5/V2.1, puis la réception Stage 6/V2.2 deux mains et Performance.
 
 Ce rapport sépare les preuves logicielles réellement exécutées de la réception partielle
 sur Samsung SM-X620 et des validations qui exigent encore un contrôleur MIDI USB, un vrai
 geste multi-touch, TalkBack ou un soak prolongé. Il clôt la tranche logicielle des portes
-1 à 4 et la V2 ; il ne constitue pas une preuve matérielle complète ni une preuve de
+1 à 6 et la V2.2 ; il ne constitue pas une preuve matérielle complète ni une preuve de
 parité avec le module de référence. Les chiffres des portes 1 à 4 restent ci-dessous des
-archives datées. L'état V2.1 logiciel est `complete` ; la certification matérielle reste
+archives datées. L'état V2.2 logiciel est `complete` ; la certification matérielle reste
 explicitement partielle.
+
+## Résultat synthétique du gate V2.2 final — 1er septembre 2026
+
+Commit d'implémentation vérifié : `9255a8309f674247565d270231a9abee445a09c8`.
+
+| Domaine | Résultat | Preuve ou commande |
+|---|---|---|
+| Domaine Kotlin pur | Réussi | `:domain:test` : 136/136 tests, 12 suites, 0 échec/erreur/ignoré |
+| Tests JVM application | Réussi | `:app:testDebugUnitTest` : 161/161 tests, 19 suites, 0 échec/erreur/ignoré |
+| Tests instrumentés | Réussi | SM-X620/API 36 : 8/8, dont fenêtre portrait 900×1 440 dp et cibles deux mains ≥48 dp |
+| DSP et pont JNI/Oboe hôte | Réussi | CTest 2/2 |
+| Diagnostic et structure | Réussi | `doctor.ps1` : 0 erreur ; `verify.ps1` vert ; avertissements limités à `kotlinc` autonome absent, SDK XML v3/v4 et EOL historiques |
+| Lint Android | Réussi | Debug, Release, Benchmark, Instrumented et Performance : 0 issue |
+| Gate et assemblages | Réussi | Debug, Release non signée, Benchmark, Instrumented, Performance et AndroidTest verts |
+| Runtime natif APK | Réussi | `libinterval_audio.so`, `liboboe.so` et `libc++_shared.so` contrôlées sur quatre ABI |
+| Installation | Réussi | V1 `0.1.0-dev-debug` et V2.2 `0.2.2-dev-performance` seules présentes ; V2.2 compilée ART `speed` |
+
+### Mesure de la régression et diagnostic audio
+
+- Baseline V2.1 instrumentée cumulative : 1 777 frames, p50 10 ms, p90 24 ms,
+  655 frames janky et 901 signaux `High input latency`.
+- V2.2 Performance, scénario contrôlé de 108 frappes : 121 frames, p50 14 ms, p90 17 ms,
+  p95 18 ms, p99 19 ms et 12 signaux `High input latency`. Le GPU reste à p50/p90 6 ms.
+- Diagnostic après stress : 48 000 Hz, 96 trames/burst, buffer 192 trames, file 0/16,
+  0 xrun, 0 événement perdu, 0 redémarrage et aucune dernière erreur.
+
+La comparaison porte sur deux fenêtres différentes : elle confirme la suppression du
+surcroît grossier de latence d’entrée observé dans la V2.1 de test, pas une certification
+soutenue à 90 Hz. `gfxinfo` ne mesure ni le délai tactile→haut-parleur, ni la latence MIDI.
+
+### Artefact V2.2 installé
+
+| Artefact | Taille | SHA-256 | Statut |
+|---|---:|---|---|
+| `app-performance.apk` | 9 227 116 octets | `CD708425DEC4671AD3DAC43F5B699A8C3FB9EE555DF994A79030231F33E7AE14` | minifié, installé, ART `speed`, moteur natif Release |
+
+La synthèse de preuve est archivée sous
+[`implementation/evidence/2026-09-01-sm-x620/v2-2-stage6-summary.md`](implementation/evidence/2026-09-01-sm-x620/v2-2-stage6-summary.md).
 
 ## Résultat synthétique du gate V2.1 final — 1er septembre 2026
 

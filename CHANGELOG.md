@@ -11,6 +11,10 @@
 - UI Compose de performance et adaptateurs Android de départ.
 - Moteur audio Oboe/DSP minimal et tests natifs hôte.
 - Cinq étapes Codex autonomes avec critères d’acceptation.
+- Sixième étape Codex pour l’ergonomie deux mains et la réduction de la régression de
+  latence, avec plan, critères et preuve SM-X620.
+- Variante V2.2 `performance` minifiée, coinstallable avec la V1, signée localement et
+  compilée avec le moteur natif Release.
 - V2.1 coinstallable `0.2.1-dev-instrumented` nommée « Interval Tablet V2 », sans
   remplacement du package V1.
 - Force to Scale déterministe, treize gammes standards 12-TET et persistance
@@ -73,6 +77,12 @@
 
 ### Changed
 
+- Scène de jeu réorganisée à deux mains en portrait et en paysage : harmonie, Force to
+  Scale, dix accords et strummer à gauche ; utilitaires et intervalles à droite.
+- Acteur musical placé sur un thread mono-thread possédé, nommé et prioritaire audio ;
+  la variante instrumentée n’est plus utilisée comme application de jeu.
+- Articulations compactées en grille 2×2 afin de préserver des cibles tactiles de 48 dp
+  et la hauteur du strummer.
 - Pads portrait compactés avec cible minimale de 48 dp et zone de grille plafonnée ; le
   Strummer horizontal utilise une hauteur réduite.
 - Panneau Synthé complété avec trois contrôles distincts pour le temps, le feedback et le
@@ -136,6 +146,10 @@
 
 ### Fixed
 
+- Régression de latence de la V2.1 de test : livraison R8/AOT dédiée et chemin musical
+  découplé de la compétition du pool générique.
+- Compression du strummer paysage à 22 dp et panneau MIDI Learn trop court ; la surface
+  harmonique latérale libère désormais une vraie zone de jeu et de défilement.
 - Same Pitch calcule désormais depuis l'ancre non shiftée puis compose exactement le
   Chromatic Shift courant : les cas stable, ajouté et relâché conservent la hauteur
   attendue ; une Note externe entendue devient aussi la référence du delta suivant.
@@ -229,6 +243,14 @@
 
 ### Verified
 
+- Gate Stage 6/V2.2 : 136/136 domaine, 161/161 application, 8/8 instrumentés sur
+  SM-X620, CTest 2/2, cinq Lint sans issue, tous les assemblages et quatre ABI.
+- Stress V2.2 Performance de 108 frappes : p50 14 ms, p90 17 ms, p95 18 ms, p99 19 ms,
+  12/121 signaux de forte latence d’entrée ; audio 48 kHz, burst 96, buffer 192,
+  queue 0/16, zéro xrun/drop/reprise/erreur. Ce test n’est pas un loopback acoustique.
+- APK `app-performance.apk` final : 9 227 116 octets, SHA-256
+  `CD708425DEC4671AD3DAC43F5B699A8C3FB9EE555DF994A79030231F33E7AE14`, installé et
+  compilé ART `speed`; seules V1 et V2.2 restent sur la tablette.
 - Gate Stage 5/V2.1 : 136/136 tests domaine sur 12 suites et 161/161 tests application
   sur 19 suites, soit 297/297 ; CTest 2/2, quatre Lint sans issue, tous les assemblages et
   runtimes natifs des quatre ABI validés.

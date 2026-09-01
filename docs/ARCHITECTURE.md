@@ -195,6 +195,26 @@ de la session ne réécrit pas les 128 presets : un slot existant ne change qu'
 propre sauvegarde. Le format Mapping v1 reste suffisant pour les clés Note/CC, actions et
 seuils actuels.
 
+## Scène deux mains et chemin d’entrée faible latence
+
+`PerformanceScreen` adapte uniquement la composition visuelle. En portrait, un panneau
+gauche 43 % regroupe harmonie et strummer, tandis qu’un panneau droit 57 % regroupe les
+utilitaires et la grille d’intervalles. Le paysage conserve cette séparation latérale et
+utilise davantage de colonnes pour les accords. Aucune règle musicale n’est dupliquée :
+les deux panneaux consomment les mêmes projections et callbacks du ViewModel.
+
+Le ViewModel possède par défaut un `ExecutorCoroutineDispatcher` mono-thread nommé
+`IntervalMusicalActor`, fermé dans `onCleared()` et configuré avec
+`THREAD_PRIORITY_AUDIO`. Les tests peuvent toujours injecter leur dispatcher. La mailbox
+FIFO, les reducers, l’émission MIDI et la mise en file native restent sérialisés sur cet
+acteur ; la persistance et les diagnostics gardent leurs workers séparés. Compose publie
+les callbacks tactiles sans attendre l’état rendu suivant.
+
+La variante `performance` hérite de Release, active R8 et les bibliothèques natives
+optimisées, utilise une signature debug uniquement pour l’installation locale et ajoute
+le suffixe de package `.performance`. Elle est l’application de jeu V2.2 ; les variantes
+Benchmark et Instrumented conservent leurs rôles de mesure et de test.
+
 ## Observabilité
 
 Le panneau Synthé non modal observe une projection audio dédiée et expose notamment :
@@ -229,6 +249,6 @@ Le modèle de séquence reste une liste de mouvements entiers. Rest, Random Step
 attendent des actions typées ; Ratchet requiert plusieurs Note On futurs annulables par
 génération, ce que le job unique de release ne doit pas simuler. La génération MIDI
 Clock/transport et Song Position Pointer, le catalogue étendu d'actions mappables, les
-CC relatifs/continus, gammes personnalisées/scopes de presets et l'optimisation soutenue à
-90 Hz restent hors de l'architecture V2.1. CV, réseau, Scala, microtonalité, MPE et MIDI 2.0 restent hors
+CC relatifs/continus, gammes personnalisées/scopes de presets et la certification soutenue à
+90 Hz restent hors de l'architecture V2.2. CV, réseau, Scala, microtonalité, MPE et MIDI 2.0 restent hors
 des étapes engagées.

@@ -357,7 +357,27 @@ Les tests fournissent explicitement :
 
 Aucune règle du domaine ne lit directement l’heure système, Android, un périphérique ou un générateur aléatoire global.
 
-## 13. Reports après la V2.1
+## 13. Surface deux mains et chemin de jeu prioritaire
+
+- En portrait, la scène réserve environ 43 % de sa largeur à la main gauche
+  (gamme, Force to Scale, dix accords, articulation et strummer) et 57 % à la main droite
+  (Home/Undo/Panic et grille 3×3 des intervalles).
+- En paysage, l’harmonie reste également à gauche au lieu de consommer une bande au-dessus
+  de la scène. Les contrôles de routage, audio, synthé et console restent disponibles dans
+  le ruban système.
+- Accords, pads, articulations et cordes exposent des cibles tactiles d’au moins 48 dp dans
+  les fenêtres tablette couvertes. L’articulation utilise une grille 2×2 afin de ne pas
+  réduire la surface du strummer.
+- L’application de jeu V2.2 est une variante minifiée, compilée avec le moteur natif
+  Release et isolée du package V1. La variante instrumentée reste réservée aux tests.
+- Les actions tactiles rejoignent la mailbox FIFO d’un acteur mono-thread possédé par le
+  ViewModel et exécuté à priorité Android audio. Leur traitement musical, MIDI et audio
+  ne dépend pas d’une recomposition Compose.
+- `gfxinfo` qualifie uniquement le rendu et les symptômes d’entrée Android. Une valeur de
+  frame ou `High input latency` n’est jamais présentée comme une latence acoustique ou
+  MIDI absolue sans mesure loopback.
+
+## 14. Reports après la V2.2
 
 - Les éléments de séquence typés Rest, Random Step et Ratchet ne sont pas assimilés à un
   mouvement entier. Ratchet attend un ordonnanceur de Note On futures annulable par
