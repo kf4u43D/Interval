@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "currentStage": 3,
   "status": "complete",
-  "lastVerifiedCommit": null,
+  "lastVerifiedCommit": "c8b9d77",
   "currentLot": "mvp-complete",
   "completedAt": "2026-09-01",
   "lastSoftwareGate": {
