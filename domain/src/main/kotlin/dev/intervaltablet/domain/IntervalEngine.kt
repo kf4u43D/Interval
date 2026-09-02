@@ -15,6 +15,26 @@ enum class PadArticulation {
     MUTED,
 }
 
+enum class ArpeggioOrder {
+    AS_PLAYED,
+    UP,
+    DOWN,
+    UP_DOWN,
+}
+
+/** Standalone pad-arpeggiator options. Rate and gate remain shared with [TransportState]. */
+data class ArpeggiatorConfig(
+    val order: ArpeggioOrder = ArpeggioOrder.AS_PLAYED,
+    val octaveSpan: Int = 1,
+    val stepEnabled: List<Boolean> = List(8) { true },
+) {
+    init {
+        require(octaveSpan in 1..3)
+        require(stepEnabled.size == 8)
+        require(stepEnabled.any { it }) { "Arpeggio pattern must contain at least one sounding step" }
+    }
+}
+
 data class InstrumentConfig(
     val rootPitchClass: Int = 0,
     val scale: ScaleDefinition = ScaleLibrary.major,
@@ -24,6 +44,7 @@ data class InstrumentConfig(
     val defaultVelocity: Int = 64,
     val chord: ChordDefinition = ChordLibrary.off,
     val padArticulation: PadArticulation = PadArticulation.ARPEGGIATED,
+    val arpeggiator: ArpeggiatorConfig = ArpeggiatorConfig(),
     val forceToScale: Boolean = false,
 ) {
     init {
@@ -58,11 +79,13 @@ data class HeldPadGesture(
     val velocity: Int,
     val articulation: PadArticulation,
     val nextArpeggioVoiceIndex: Int = 0,
+    val nextArpeggioStepIndex: Int = 0,
 ) {
     init {
         require(leadNote in 0..127)
         require(velocity in 1..127)
         require(nextArpeggioVoiceIndex >= 0)
+        require(nextArpeggioStepIndex >= 0)
     }
 }
 
@@ -236,6 +259,12 @@ sealed interface InstrumentAction {
         val timestampNanos: Long = 0L,
     ) : InstrumentAction
 
+    /** Releases only the sounding arpeggio voice while retaining its physical pad session. */
+    data class ReleaseArpeggioVoice(
+        val source: TriggerSource,
+        val timestampNanos: Long = 0L,
+    ) : InstrumentAction
+
     data class Undo(
         val source: TriggerSource,
         val velocity: Int,
@@ -274,6 +303,10 @@ sealed interface InstrumentAction {
     data class SetRange(val range: MidiNoteRange, val timestampNanos: Long = 0L) : InstrumentAction
     data class SetWrap(val enabled: Boolean, val timestampNanos: Long = 0L) : InstrumentAction
     data class SetChord(val chord: ChordDefinition, val timestampNanos: Long = 0L) : InstrumentAction
+    data class SetArpeggiatorConfig(
+        val config: ArpeggiatorConfig,
+        val timestampNanos: Long = 0L,
+    ) : InstrumentAction
     data class SetPadArticulation(
         val mode: PadArticulation,
         val timestampNanos: Long = 0L,
@@ -375,6 +408,11 @@ class IntervalReducer {
             is InstrumentAction.UndoThenMove -> undoThenMove(state, action)
             is InstrumentAction.Release -> releaseSource(state, action.source, action.releaseVelocity, action.timestampNanos)
             is InstrumentAction.AdvanceArpeggio -> advanceArpeggio(state, action)
+            is InstrumentAction.ReleaseArpeggioVoice -> releaseOwnedInstances(
+                state,
+                action.source,
+                action.timestampNanos,
+            )
             is InstrumentAction.Undo -> undo(state, action)
             is InstrumentAction.Home -> home(state, action)
             is InstrumentAction.AnchorExternal -> InstrumentTransition(
@@ -385,11 +423,7 @@ class IntervalReducer {
                 ),
                 emptyList(),
             )
-            is InstrumentAction.SetScale -> reconfigure(
-                state,
-                state.config.copy(scale = action.scale),
-                action.timestampNanos,
-            )
+            is InstrumentAction.SetScale -> setScale(state, action)
             is InstrumentAction.SetRoot -> reconfigure(
                 state,
                 state.config.copy(rootPitchClass = action.rootPitchClass),
@@ -406,6 +440,7 @@ class IntervalReducer {
                 action.timestampNanos,
             )
             is InstrumentAction.SetChord -> setChord(state, action)
+            is InstrumentAction.SetArpeggiatorConfig -> setArpeggiatorConfig(state, action)
             is InstrumentAction.SetPadArticulation -> InstrumentTransition(
                 state.copy(config = state.config.copy(padArticulation = action.mode)),
                 emptyList(),
@@ -499,8 +534,14 @@ class IntervalReducer {
             releasedState.previousDistinctNotes
         }
         val fullVoicing = buildChord(releasedState.config, resolvedTarget, velocity)
+        val arpeggioVoicing = buildArpeggio(releasedState.config, resolvedTarget, velocity)
+        val firstArpeggioStepEnabled = releasedState.config.arpeggiator.stepEnabled.first()
         val unshiftedInstances = when (articulation) {
-            PadArticulation.ARPEGGIATED -> fullVoicing.take(1)
+            PadArticulation.ARPEGGIATED -> if (firstArpeggioStepEnabled) {
+                arpeggioVoicing.take(1)
+            } else {
+                emptyList()
+            }
             PadArticulation.STACKED -> fullVoicing
             PadArticulation.MUTED -> emptyList()
         }
@@ -521,12 +562,15 @@ class IntervalReducer {
                     velocity = velocity,
                     articulation = articulation,
                     nextArpeggioVoiceIndex = if (
-                        articulation == PadArticulation.ARPEGGIATED && fullVoicing.isNotEmpty()
+                        articulation == PadArticulation.ARPEGGIATED &&
+                        firstArpeggioStepEnabled &&
+                        arpeggioVoicing.isNotEmpty()
                     ) {
-                        1 % fullVoicing.size
+                        1 % arpeggioVoicing.size
                     } else {
                         0
                     },
+                    nextArpeggioStepIndex = if (articulation == PadArticulation.ARPEGGIATED) 1 else 0,
                 )
             )
         } else {
@@ -582,7 +626,60 @@ class IntervalReducer {
             val held = checkNotNull(nextState.heldPadBySource[source])
             nextState = nextState.copy(
                 heldPadBySource = nextState.heldPadBySource + (
-                    source to held.copy(nextArpeggioVoiceIndex = 0)
+                    source to held.copy(nextArpeggioVoiceIndex = 0, nextArpeggioStepIndex = 0)
+                ),
+            )
+            val revoiced = revoiceHeldPad(nextState, source, action.timestampNanos)
+            nextState = revoiced.state
+            events += revoiced.events
+        }
+        return InstrumentTransition(nextState, events)
+    }
+
+    private fun setScale(
+        state: InstrumentState,
+        action: InstrumentAction.SetScale,
+    ): InstrumentTransition {
+        if (action.scale == state.config.scale) return InstrumentTransition(state, emptyList())
+        val nextConfig = state.config.copy(scale = action.scale)
+        val nextGrid = nextConfig.grid()
+        val remappedGestures = state.heldPadBySource.mapValues { (_, gesture) ->
+            gesture.copy(
+                leadNote = nextGrid.nearest(gesture.leadNote),
+                nextArpeggioVoiceIndex = 0,
+                nextArpeggioStepIndex = 0,
+            )
+        }
+        var nextState = state.copy(
+            config = nextConfig,
+            currentNote = nextGrid.nearest(state.currentNote),
+            previousDistinctNotes = emptyList(),
+            heldPadBySource = remappedGestures,
+        )
+        val events = mutableListOf<OutputEvent>()
+        remappedGestures.keys.forEach { source ->
+            val revoiced = revoiceHeldPad(nextState, source, action.timestampNanos)
+            nextState = revoiced.state
+            events += revoiced.events
+        }
+        return InstrumentTransition(nextState, events)
+    }
+
+    private fun setArpeggiatorConfig(
+        state: InstrumentState,
+        action: InstrumentAction.SetArpeggiatorConfig,
+    ): InstrumentTransition {
+        if (action.config == state.config.arpeggiator) return InstrumentTransition(state, emptyList())
+        var nextState = state.copy(config = state.config.copy(arpeggiator = action.config))
+        val events = mutableListOf<OutputEvent>()
+        state.heldPadBySource
+            .filterValues { gesture -> gesture.articulation == PadArticulation.ARPEGGIATED }
+            .keys
+            .forEach { source ->
+            val held = checkNotNull(nextState.heldPadBySource[source])
+            nextState = nextState.copy(
+                heldPadBySource = nextState.heldPadBySource + (
+                    source to held.copy(nextArpeggioVoiceIndex = 0, nextArpeggioStepIndex = 0)
                 ),
             )
             val revoiced = revoiceHeldPad(nextState, source, action.timestampNanos)
@@ -600,14 +697,29 @@ class IntervalReducer {
         val gesture = state.heldPadBySource[source]
             ?: return InstrumentTransition(state, emptyList())
         val release = releaseOwnedInstances(state, source, timestampNanos)
-        val fullVoicing = buildChord(release.state.config, gesture.leadNote, gesture.velocity)
+        val fullVoicing = when (gesture.articulation) {
+            PadArticulation.ARPEGGIATED -> buildArpeggio(
+                release.state.config,
+                gesture.leadNote,
+                gesture.velocity,
+            )
+            PadArticulation.STACKED,
+            PadArticulation.MUTED,
+            -> buildChord(release.state.config, gesture.leadNote, gesture.velocity)
+        }
         val voiceIndex = if (fullVoicing.isEmpty()) {
             0
         } else {
             gesture.nextArpeggioVoiceIndex % fullVoicing.size
         }
+        val stepIndex = gesture.nextArpeggioStepIndex % release.state.config.arpeggiator.stepEnabled.size
+        val stepEnabled = release.state.config.arpeggiator.stepEnabled[stepIndex]
         val unshiftedInstances = when (gesture.articulation) {
-            PadArticulation.ARPEGGIATED -> fullVoicing.getOrNull(voiceIndex)?.let(::listOf).orEmpty()
+            PadArticulation.ARPEGGIATED -> if (stepEnabled) {
+                fullVoicing.getOrNull(voiceIndex)?.let(::listOf).orEmpty()
+            } else {
+                emptyList()
+            }
             PadArticulation.STACKED -> fullVoicing
             PadArticulation.MUTED -> emptyList()
         }
@@ -619,7 +731,12 @@ class IntervalReducer {
         val nextVoiceIndex = if (
             gesture.articulation == PadArticulation.ARPEGGIATED && fullVoicing.isNotEmpty()
         ) {
-            (voiceIndex + 1) % fullVoicing.size
+            if (stepEnabled) (voiceIndex + 1) % fullVoicing.size else voiceIndex
+        } else {
+            0
+        }
+        val nextStepIndex = if (gesture.articulation == PadArticulation.ARPEGGIATED) {
+            (stepIndex + 1) % release.state.config.arpeggiator.stepEnabled.size
         } else {
             0
         }
@@ -646,7 +763,10 @@ class IntervalReducer {
             state = release.state.copy(
                 activeBySource = nextActive,
                 heldPadBySource = release.state.heldPadBySource + (
-                    source to gesture.copy(nextArpeggioVoiceIndex = nextVoiceIndex)
+                    source to gesture.copy(
+                        nextArpeggioVoiceIndex = nextVoiceIndex,
+                        nextArpeggioStepIndex = nextStepIndex,
+                    )
                 ),
                 lastSoundedLeadNote = soundedNote ?: release.state.lastSoundedLeadNote,
                 lastPitchDeltaSemitones = nextPitchDelta,
@@ -833,6 +953,30 @@ class IntervalReducer {
         }
     }
 
+    private fun buildArpeggio(
+        config: InstrumentConfig,
+        lead: Int,
+        velocity: Int,
+    ): List<ActiveNoteInstance> {
+        val expanded = buildChord(config, lead, velocity).flatMap { instance ->
+            (0 until config.arpeggiator.octaveSpan).mapNotNull { octave ->
+                val note = instance.note + octave * 12
+                instance.copy(note = note).takeIf { config.range.contains(note) }
+            }
+        }
+        val ascending = expanded.sortedBy(ActiveNoteInstance::note)
+        return when (config.arpeggiator.order) {
+            ArpeggioOrder.AS_PLAYED -> expanded
+            ArpeggioOrder.UP -> ascending
+            ArpeggioOrder.DOWN -> ascending.asReversed()
+            ArpeggioOrder.UP_DOWN -> if (ascending.size <= 2) {
+                ascending
+            } else {
+                ascending + ascending.subList(1, ascending.lastIndex).asReversed()
+            }
+        }
+    }
+
     private fun shiftInstances(
         config: InstrumentConfig,
         instances: List<ActiveNoteInstance>,
@@ -859,14 +1003,22 @@ private fun InstrumentConfig.forceToScale(note: Int): Int {
     return if (forceToScale) grid().nearest(note) else note
 }
 
-/** Full current voicing in chord-definition order, preserving duplicates and omitting out-of-range tones. */
+/** Three-octave current voicing, preserving duplicate strings and omitting out-of-range tones. */
 fun InstrumentState.strumNotes(): List<Int> = resolveVoicingNotes(config, currentNote)
+    .flatMap { note -> listOf(note - 12, note, note + 12) }
+    .filter(config.range::contains)
+    .sorted()
 
 /** True when a retained pad owns a multi-voice standalone arpeggio. */
 fun InstrumentState.hasStandaloneArpeggio(source: TriggerSource): Boolean {
     val gesture = heldPadBySource[source] ?: return false
-    return gesture.articulation == PadArticulation.ARPEGGIATED &&
-        resolveVoicingNotes(config, gesture.leadNote).size > 1
+    if (gesture.articulation != PadArticulation.ARPEGGIATED) return false
+    val soundingVoices = resolveVoicingNotes(config, gesture.leadNote).sumOf { note ->
+        (0 until config.arpeggiator.octaveSpan).count { octave ->
+            config.range.contains(note + octave * 12)
+        }
+    }
+    return soundingVoices > 1 || config.arpeggiator.stepEnabled.any { !it }
 }
 
 private fun resolveVoicingNotes(config: InstrumentConfig, lead: Int): List<Int> {

@@ -10,6 +10,7 @@ import androidx.compose.runtime.structuralEqualityPolicy
 import dev.intervaltablet.AppUiState
 import dev.intervaltablet.audio.AudioDiagnostics
 import dev.intervaltablet.domain.ChordDefinition
+import dev.intervaltablet.domain.ArpeggiatorConfig
 import dev.intervaltablet.domain.InstrumentConfig
 import dev.intervaltablet.domain.InstrumentState
 import dev.intervaltablet.domain.MidiNoteRange
@@ -42,6 +43,10 @@ internal data class PerformanceHeaderUiState(
     val audioAvailable: Boolean,
     val audioRunning: Boolean,
     val performanceLock: Boolean,
+    val tempoBpm: Int,
+    val beatsPerBar: Int,
+    val beatUnit: Int,
+    val audioMonitorEnabled: Boolean,
 )
 
 @Immutable
@@ -123,6 +128,16 @@ internal data class PerformanceSynthUiState(
 )
 
 @Immutable
+internal data class PerformanceArpeggiatorUiState(
+    val config: ArpeggiatorConfig,
+    val tempoBpm: Int,
+    val clocksPerStep: Int,
+    val gatePercent: Int,
+    val beatsPerBar: Int,
+    val beatUnit: Int,
+)
+
+@Immutable
 internal data class PerformanceConsoleUiState(
     val config: InstrumentConfig,
     val sources: List<MidiPortDescriptor>,
@@ -175,6 +190,7 @@ internal class PerformanceUiProjections internal constructor(
     val status: State<PerformanceStatusUiState>,
     val lock: State<PerformanceLockUiState>,
     val synth: State<PerformanceSynthUiState>,
+    val arpeggiator: State<PerformanceArpeggiatorUiState>,
     val console: State<PerformanceConsoleUiState>,
     val midiMappingEditor: State<MidiMappingEditorUiState>,
 )
@@ -264,6 +280,9 @@ internal fun rememberPerformanceUiProjections(
             synth = derivedStateOf(structuralEqualityPolicy()) {
                 appState.value.toPerformanceSynthUiState()
             },
+            arpeggiator = derivedStateOf(structuralEqualityPolicy()) {
+                appState.value.toPerformanceArpeggiatorUiState()
+            },
             console = derivedStateOf(structuralEqualityPolicy()) {
                 appState.value.toPerformanceConsoleUiState()
             },
@@ -324,6 +343,10 @@ internal fun AppUiState.toPerformanceHeaderUiState(): PerformanceHeaderUiState {
         audioAvailable = audioAvailable,
         audioRunning = audioRunning,
         performanceLock = performanceLock,
+        tempoBpm = performance.transport.tempoBpm,
+        beatsPerBar = performance.transport.timeSignature.beatsPerBar,
+        beatUnit = performance.transport.timeSignature.beatUnit,
+        audioMonitorEnabled = audioMonitorEnabled,
     )
 }
 
@@ -379,6 +402,18 @@ internal fun AppUiState.toPerformanceSynthUiState(): PerformanceSynthUiState {
     return PerformanceSynthUiState(
         patch = synthPatch,
         diagnostics = audioDiagnostics,
+    )
+}
+
+internal fun AppUiState.toPerformanceArpeggiatorUiState(): PerformanceArpeggiatorUiState {
+    val transport = performance.transport
+    return PerformanceArpeggiatorUiState(
+        config = instrument.config.arpeggiator,
+        tempoBpm = transport.tempoBpm,
+        clocksPerStep = transport.clocksPerStep,
+        gatePercent = transport.noteDurationPercent,
+        beatsPerBar = transport.timeSignature.beatsPerBar,
+        beatUnit = transport.timeSignature.beatUnit,
     )
 }
 

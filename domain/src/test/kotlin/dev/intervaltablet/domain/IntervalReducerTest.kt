@@ -548,7 +548,6 @@ class IntervalReducerTest {
     fun releasingReconfigurationsUseTheirActionTimestampAndClearVoices() {
         val timestamp = 9_876L
         val actions = listOf<(Long) -> InstrumentAction>(
-            { InstrumentAction.SetScale(ScaleLibrary.naturalMinor, it) },
             { InstrumentAction.SetRoot(1, it) },
             { InstrumentAction.SetRange(MidiNoteRange(48, 72), it) },
             { InstrumentAction.SetWrap(false, it) },

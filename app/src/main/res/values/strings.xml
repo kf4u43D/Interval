@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Interval Tablet V2.3</string>
+    <string name="app_name">Interval Tablet V2.4</string>
     <string name="performance_note">Note</string>
     <string name="performance_degree">Degré</string>
     <string name="performance_chromatic_anchor">Ancre chromatique</string>
@@ -37,8 +37,8 @@
     <string name="performance_lock">Verrou scène</string>
     <string name="performance_unlock">Déverrouiller</string>
     <string name="performance_locked">Configuration verrouillée</string>
-    <string name="performance_open_console">Console</string>
-    <string name="performance_close_console">Fermer la console</string>
+    <string name="performance_open_console">MIDI</string>
+    <string name="performance_close_console">Revenir à Interval</string>
     <string name="performance_open_synth">Synthé</string>
     <string name="performance_audio_on">Audio monitor actif</string>
     <string name="performance_audio_off">Audio monitor arrêté · MIDI opérationnel</string>
@@ -112,8 +112,8 @@
     <string name="interval_direction_down">Descendre</string>
     <string name="interval_direction_repeat">Rejouer</string>
 
-    <string name="midi_console_title">Console MIDI</string>
-    <string name="midi_console_description">Connexions, canaux et comportement MIDI</string>
+    <string name="midi_console_title">MIDI</string>
+    <string name="midi_console_description">MIDI In, MIDI Out, canaux, routage et apprentissage</string>
     <string name="midi_input">MIDI In</string>
     <string name="midi_output">MIDI Out</string>
     <string name="midi_no_port">Aucun port</string>

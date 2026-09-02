@@ -95,12 +95,22 @@ class SynthPanelAccessibilityTest {
             SynthParameter.DECAY,
             SynthParameter.SUSTAIN,
             SynthParameter.RELEASE,
+            SynthParameter.FILTER_ATTACK,
+            SynthParameter.FILTER_DECAY,
+            SynthParameter.FILTER_SUSTAIN,
+            SynthParameter.FILTER_RELEASE,
+            SynthParameter.FILTER_ENV_AMOUNT,
+            SynthParameter.LFO_RATE,
+            SynthParameter.LFO_DEPTH,
+            SynthParameter.LFO_DELAY,
             SynthParameter.CHORUS_MIX,
             SynthParameter.DELAY_TIME,
             SynthParameter.DELAY_FEEDBACK,
             SynthParameter.DELAY_MIX,
+            SynthParameter.DELAY_SYNC_BEATS,
             SynthParameter.REVERB_MIX,
             SynthParameter.MASTER,
+            SynthParameter.DRIVE,
         ).map(SynthParameter::name)
         sliderKeys.forEach { key ->
             val node = composeRule.onNodeWithTag(synthSliderTestTag(key), useUnmergedTree = true)
@@ -155,7 +165,7 @@ class SynthPanelAccessibilityTest {
         composeRule.runOnIdle { state = state.copy(performanceLock = true) }
         composeRule.waitForIdle()
         assertTrue(composeRule.onAllNodesWithTag(SynthPanelTestTag).fetchSemanticsNodes().isEmpty())
-        assertTrue(composeRule.onAllNodesWithTag(SynthPanelOpenTestTag).fetchSemanticsNodes().isEmpty())
+        composeRule.onNodeWithTag(SynthPanelOpenTestTag).assertIsNotEnabled()
     }
 
     @Test

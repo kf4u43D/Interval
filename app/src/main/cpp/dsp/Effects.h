@@ -144,11 +144,13 @@ public:
         left_.prepare(size);
         right_.prepare(size);
         delaySamples_.prepare(sampleRate_, 0.04F);
-        const float boundedTime = std::clamp(
+        freeTimeSeconds_ = std::clamp(
             finiteOr(initialTimeSeconds, kDefaultTimeSeconds),
             0.01F,
             2.0F);
-        delaySamples_.reset(sampleRate_ * boundedTime);
+        syncBeats_ = 0.0F;
+        tempoBpm_ = 120.0F;
+        delaySamples_.reset(sampleRate_ * effectiveTimeSeconds());
         feedback_.prepare(sampleRate_);
         feedback_.reset(std::clamp(finiteOr(initialFeedback, kDefaultFeedback), 0.0F, 0.94F));
         mix_.prepare(sampleRate_);
@@ -157,7 +159,20 @@ public:
 
     void setTimeSeconds(const float value) noexcept {
         if (std::isfinite(value)) {
-            delaySamples_.setTarget(std::clamp(value, 0.01F, 2.0F) * sampleRate_);
+            freeTimeSeconds_ = std::clamp(value, 0.01F, 2.0F);
+            updateDelayTarget();
+        }
+    }
+    void setSyncBeats(const float value) noexcept {
+        if (std::isfinite(value)) {
+            syncBeats_ = std::clamp(value, 0.0F, 4.0F);
+            updateDelayTarget();
+        }
+    }
+    void setTempoBpm(const float value) noexcept {
+        if (std::isfinite(value)) {
+            tempoBpm_ = std::clamp(value, 20.0F, 300.0F);
+            updateDelayTarget();
         }
     }
     void setFeedback(const float value) noexcept {
@@ -168,8 +183,9 @@ public:
     }
     void clear() noexcept { left_.clear(); right_.clear(); }
 
-    void process(float& left, float& right) noexcept {
-        const float delay = delaySamples_.next();
+    void process(float& left, float& right, const float modulation = 0.0F) noexcept {
+        const float delay = delaySamples_.next() *
+            std::clamp(1.0F + finiteOr(modulation, 0.0F) * 0.18F, 0.82F, 1.18F);
         const float delayedLeft = left_.read(delay);
         const float delayedRight = right_.read(delay * 1.011F);
         const float feedback = feedback_.next();
@@ -189,12 +205,24 @@ public:
 #endif
 
 private:
+    float effectiveTimeSeconds() const noexcept {
+        if (syncBeats_ <= 0.0F) return freeTimeSeconds_;
+        return std::clamp(60.0F / tempoBpm_ * syncBeats_, 0.01F, 2.0F);
+    }
+
+    void updateDelayTarget() noexcept {
+        delaySamples_.setTarget(effectiveTimeSeconds() * sampleRate_);
+    }
+
     float sampleRate_{48000.0F};
     FractionalDelayLine left_{};
     FractionalDelayLine right_{};
     SmoothedValue delaySamples_{};
     SmoothedValue feedback_{};
     SmoothedValue mix_{};
+    float freeTimeSeconds_{kDefaultTimeSeconds};
+    float syncBeats_{0.0F};
+    float tempoBpm_{120.0F};
 };
 
 class CombFilter {

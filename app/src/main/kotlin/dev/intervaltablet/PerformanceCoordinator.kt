@@ -292,13 +292,16 @@ class PerformanceCoordinator(
                 (action.source to transition.state.lastIntervalSteps)
             is InstrumentAction.UndoThenMove -> state.activeStepsBySource + (action.source to action.steps)
             is InstrumentAction.Release -> state.activeStepsBySource - action.source
-            is InstrumentAction.SetScale,
             is InstrumentAction.SetRoot,
             is InstrumentAction.SetRange,
             is InstrumentAction.SetWrap,
             is InstrumentAction.SetOutputChannel,
             is InstrumentAction.Panic,
             -> emptyMap()
+            is InstrumentAction.SetScale,
+            is InstrumentAction.SetArpeggiatorConfig,
+            is InstrumentAction.ReleaseArpeggioVoice,
+            -> state.activeStepsBySource
             else -> state.activeStepsBySource
         }
         val effects = transition.events.map { output ->
@@ -784,6 +787,7 @@ class PerformanceCoordinator(
             is TransportAction.SetTempo,
             is TransportAction.SetClocksPerStep,
             is TransportAction.SetNoteDuration,
+            is TransportAction.SetTimeSignature,
             -> 0L
         }
     }
@@ -809,6 +813,7 @@ class PerformanceCoordinator(
             is InstrumentAction.UndoThenMove -> timestampNanos
             is InstrumentAction.Release -> timestampNanos
             is InstrumentAction.AdvanceArpeggio -> timestampNanos
+            is InstrumentAction.ReleaseArpeggioVoice -> timestampNanos
             is InstrumentAction.Undo -> timestampNanos
             is InstrumentAction.Home -> timestampNanos
             is InstrumentAction.AnchorExternal -> 0L
@@ -817,6 +822,7 @@ class PerformanceCoordinator(
             is InstrumentAction.SetRange -> timestampNanos
             is InstrumentAction.SetWrap -> timestampNanos
             is InstrumentAction.SetChord -> timestampNanos
+            is InstrumentAction.SetArpeggiatorConfig -> timestampNanos
             is InstrumentAction.SetPadArticulation -> timestampNanos
             is InstrumentAction.SetForceToScale -> timestampNanos
             is InstrumentAction.SetOutputChannel -> timestampNanos

@@ -58,6 +58,7 @@ fun TransportState.toPersistenceSnapshot(): TransportOptionsSnapshot = Transport
         ClockSource.INTERNAL -> StoredClockSource.INTERNAL
         ClockSource.MIDI -> StoredClockSource.MIDI
     },
+    timeSignature = timeSignature,
 )
 
 /** Transport position and deadlines are intentionally not persisted or resumed. */
@@ -70,6 +71,7 @@ fun TransportOptionsSnapshot.toStoppedDomainState(): TransportState = TransportS
     clocksPerStep = clocksPerStep,
     tempoBpm = tempoBpm,
     noteDurationPercent = noteDurationPercent,
+    timeSignature = timeSignature,
 )
 
 private fun ToneRowPlayMode.toSnapshotMode(): ToneRowPlaybackSnapshotMode = when (this) {

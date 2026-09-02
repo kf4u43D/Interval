@@ -25,6 +25,18 @@ class AudioParametersTest {
             Contract(13, 0.0F, 1.0F, 0.16F),
             Contract(14, 0.0F, 1.0F, 0.20F),
             Contract(15, 0.0F, 1.5F, 0.35F),
+            Contract(16, 0.0005F, 10.0F, 0.005F),
+            Contract(17, 0.001F, 20.0F, 0.18F),
+            Contract(18, 0.0F, 1.0F, 0.0F),
+            Contract(19, 0.001F, 30.0F, 0.35F),
+            Contract(20, -4.0F, 4.0F, 0.0F),
+            Contract(21, 0.0F, 1.0F, 0.0F),
+            Contract(22, 0.05F, 20.0F, 2.0F),
+            Contract(23, 0.0F, 1.0F, 0.0F),
+            Contract(24, 0.0F, 2.0F, 0.0F),
+            Contract(25, 0.0F, 10.0F, 0.0F),
+            Contract(26, 0.0F, 4.0F, 0.0F),
+            Contract(27, 20.0F, 300.0F, 120.0F),
         )
 
         assertEquals(
@@ -38,7 +50,7 @@ class AudioParametersTest {
                 )
             },
         )
-        assertEquals(16, SynthParameter.entries.map(SynthParameter::wireId).distinct().size)
+        assertEquals(28, SynthParameter.entries.map(SynthParameter::wireId).distinct().size)
     }
 
     @Test
@@ -98,8 +110,21 @@ class AudioParametersTest {
 
         val commands = patch.toAudioCommands()
 
-        assertEquals((0..15).toList(), commands.map { it.parameter.wireId })
+        assertEquals((0..27).toList(), commands.map { it.parameter.wireId })
         assertTrue(commands.all { command -> command.value == patch[command.parameter] })
+    }
+
+    @Test
+    fun builtInPresetsAreNamedUniqueAndEveryPatchRespectsTheWireContract() {
+        assertTrue(SynthPresetLibrary.all.size >= 6)
+        assertEquals(
+            SynthPresetLibrary.all.size,
+            SynthPresetLibrary.all.map(SynthPreset::id).distinct().size,
+        )
+        SynthPresetLibrary.all.forEach { preset ->
+            assertTrue(preset.displayName.isNotBlank())
+            assertEquals(28, preset.patch.toAudioCommands().size)
+        }
     }
 
     @Test

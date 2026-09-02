@@ -67,6 +67,19 @@ class TransportReducerTest {
     }
 
     @Test
+    fun timeSignatureChangesImmediatelyWithoutDisturbingClockPosition() {
+        val playing = reducer.reduce(TransportState(), TransportAction.Start(10L)).state
+        val signature = TimeSignature(beatsPerBar = 7, beatUnit = 8)
+
+        val changed = reducer.reduce(playing, TransportAction.SetTimeSignature(signature))
+
+        assertEquals(signature, changed.state.timeSignature)
+        assertEquals(playing.nextInternalTickNanos, changed.state.nextInternalTickNanos)
+        assertEquals(playing.stepCounter, changed.state.stepCounter)
+        assertTrue(changed.events.isEmpty())
+    }
+
+    @Test
     fun stopAndContinuePreservePositionAndWaitAFullStepBeforeResuming() {
         var state = reducer.reduce(TransportState(), TransportAction.Start(0L)).state
         state = reducer.reduce(state, TransportAction.InternalClock(125_000_000L)).state
@@ -219,6 +232,8 @@ class TransportReducerTest {
         assertThrows(IllegalArgumentException::class.java) { TransportState(noteDurationPercent = 101) }
         assertThrows(IllegalArgumentException::class.java) { TransportAction.SetTempo(301) }
         assertThrows(IllegalArgumentException::class.java) { TransportAction.SetClocksPerStep(97) }
+        assertThrows(IllegalArgumentException::class.java) { TimeSignature(beatsPerBar = 0) }
+        assertThrows(IllegalArgumentException::class.java) { TimeSignature(4, beatUnit = 3) }
         assertThrows(IllegalArgumentException::class.java) { TransportAction.InternalClock(-1L) }
         assertThrows(IllegalArgumentException::class.java) {
             TransportState(clockSource = ClockSource.MIDI, nextInternalTickNanos = 1L)

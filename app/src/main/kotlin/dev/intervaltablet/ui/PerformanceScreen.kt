@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -106,6 +107,8 @@ import dev.intervaltablet.AppUiState
 import dev.intervaltablet.R
 import dev.intervaltablet.audio.AudioDiagnostics
 import dev.intervaltablet.navigationAnchor
+import dev.intervaltablet.domain.ArpeggiatorConfig
+import dev.intervaltablet.domain.ArpeggioOrder
 import dev.intervaltablet.domain.ChordDefinition
 import dev.intervaltablet.domain.ChordLibrary
 import dev.intervaltablet.domain.InstrumentConfig
@@ -119,6 +122,8 @@ import dev.intervaltablet.domain.ScaleDefinition
 import dev.intervaltablet.domain.ScaleLibrary
 import dev.intervaltablet.domain.SynthParameter
 import dev.intervaltablet.domain.SynthPatch
+import dev.intervaltablet.domain.SynthLfoDestination
+import dev.intervaltablet.domain.SynthPresetLibrary
 import dev.intervaltablet.domain.midiNoteName
 import dev.intervaltablet.midi.MidiConnectionPhase
 import dev.intervaltablet.midi.MidiConnectionState
@@ -142,6 +147,13 @@ internal const val SynthCutoffUiMaximumHz: Float = 20_000f
 internal fun synthSliderTestTag(key: String): String = "synth-slider:$key"
 internal fun scaleChipTestTag(scaleId: String): String = "scale-chip:$scaleId"
 internal fun chordChipTestTag(chordId: String): String = "chord-chip:$chordId"
+
+private enum class PerformancePage {
+    INTERVAL,
+    MIDI,
+    SYNTH,
+    ARPEGGIATOR,
+}
 
 @androidx.compose.runtime.Immutable
 internal data class IntervalPadPreview(
@@ -198,6 +210,11 @@ fun PerformanceScreen(
     onSetRoot: (Int) -> Unit,
     onSetChord: (ChordDefinition) -> Unit,
     onSetForceToScale: (Boolean) -> Unit = {},
+    onSetArpeggiatorConfig: (ArpeggiatorConfig) -> Unit = {},
+    onSetTempo: (Int) -> Unit = {},
+    onSetClockDivision: (Int) -> Unit = {},
+    onSetArpeggioGate: (Int) -> Unit = {},
+    onSetTimeSignature: (Int, Int) -> Unit = { _, _ -> },
     onSetRange: (MidiNoteRange) -> Unit,
     onSetWrap: (Boolean) -> Unit,
     onSetInputChannel: (Int?) -> Unit,
@@ -245,6 +262,11 @@ fun PerformanceScreen(
         onSetRoot = onSetRoot,
         onSetChord = onSetChord,
         onSetForceToScale = onSetForceToScale,
+        onSetArpeggiatorConfig = onSetArpeggiatorConfig,
+        onSetTempo = onSetTempo,
+        onSetClockDivision = onSetClockDivision,
+        onSetArpeggioGate = onSetArpeggioGate,
+        onSetTimeSignature = onSetTimeSignature,
         onSetRange = onSetRange,
         onSetWrap = onSetWrap,
         onSetInputChannel = onSetInputChannel,
@@ -282,6 +304,683 @@ internal fun ProjectedPerformanceScreen(
     onSetRoot: (Int) -> Unit,
     onSetChord: (ChordDefinition) -> Unit,
     onSetForceToScale: (Boolean) -> Unit = {},
+    onSetArpeggiatorConfig: (ArpeggiatorConfig) -> Unit = {},
+    onSetTempo: (Int) -> Unit = {},
+    onSetClockDivision: (Int) -> Unit = {},
+    onSetArpeggioGate: (Int) -> Unit = {},
+    onSetTimeSignature: (Int, Int) -> Unit = { _, _ -> },
+    onSetRange: (MidiNoteRange) -> Unit,
+    onSetWrap: (Boolean) -> Unit,
+    onSetInputChannel: (Int?) -> Unit,
+    onSetOutputChannel: (Int) -> Unit,
+    onSetMode: (PassThroughMode) -> Unit,
+    onSelectSource: (MidiPortDescriptor?) -> Unit,
+    onSelectDestination: (MidiPortDescriptor?) -> Unit,
+    onResetMidiMapping: () -> Unit,
+    onToggleAudio: () -> Unit,
+    onTogglePerformanceLock: () -> Unit,
+    onDismissStatus: () -> Unit,
+    onSynthPatchPreview: (SynthPatch) -> Unit = {},
+    onSynthPatchChangeFinished: (SynthPatch) -> Unit = {},
+    onOpenMidiMappingEditor: () -> Unit = {},
+    onMidiMappingEditorAction: (MidiMappingEditorAction) -> Unit = {},
+    onSaveMidiMappingEditor: () -> Unit = {},
+) {
+    var selectedPage by rememberSaveable { mutableStateOf(PerformancePage.INTERVAL) }
+    var toneRowArrangementOpen by rememberSaveable { mutableStateOf(false) }
+    PerformanceLockObserver(projections.lock) {
+        selectedPage = PerformancePage.INTERVAL
+        toneRowArrangementOpen = false
+    }
+    val backgroundColor = MaterialTheme.colorScheme.background
+    val backgroundEndColor = MaterialTheme.colorScheme.surfaceContainerLowest
+    val stageBackground = remember(backgroundColor, backgroundEndColor) {
+        Brush.verticalGradient(listOf(backgroundColor, backgroundEndColor))
+    }
+
+    Scaffold(
+        contentWindowInsets = WindowInsets.safeDrawing,
+        containerColor = MaterialTheme.colorScheme.background,
+    ) { scaffoldPadding ->
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(scaffoldPadding)
+                .background(stageBackground),
+        ) {
+            val compact = maxWidth < 1_040.dp || maxHeight < 640.dp
+            val portrait = maxHeight > maxWidth
+            val availableWidth = maxWidth
+            val outerPadding = if (compact) 6.dp else 10.dp
+            val sectionGap = if (compact) 6.dp else 9.dp
+            Column(
+                modifier = Modifier.fillMaxSize().padding(outerPadding),
+                verticalArrangement = Arrangement.spacedBy(sectionGap),
+            ) {
+                UnifiedTopBar(
+                    pitch = projections.pitch.value,
+                    header = projections.header.value,
+                    utility = projections.utility.value,
+                    controls = projections.controls.value,
+                    selectedPage = selectedPage,
+                    compact = compact,
+                    onSelectPage = { page ->
+                        if (
+                            page == PerformancePage.INTERVAL ||
+                            !projections.lock.value.locked
+                        ) {
+                            selectedPage = page
+                            toneRowArrangementOpen = false
+                        }
+                    },
+                    onHome = onHome,
+                    onUndo = onUndo,
+                    onPanic = onPanic,
+                    onToggleAudio = onToggleAudio,
+                    onSetTempo = onSetTempo,
+                    onSetTimeSignature = onSetTimeSignature,
+                )
+
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    when (selectedPage) {
+                        PerformancePage.INTERVAL -> Column(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(sectionGap),
+                        ) {
+                            V24PerformanceStrip(
+                                toneRow = toneRowContentState.value,
+                                articulation = projections.articulation.value.articulation,
+                                performanceLock = projections.lock.value.locked,
+                                onIntent = onToneRowIntent,
+                                onSetArticulation = onSetPadArticulation,
+                                onOpenArrangement = { toneRowArrangementOpen = true },
+                            )
+                            V24IntervalStage(
+                                projections = projections,
+                                portrait = portrait,
+                                compact = compact,
+                                sectionGap = sectionGap,
+                                onSetScale = onSetScale,
+                                onSetChord = onSetChord,
+                                onSetForceToScale = onSetForceToScale,
+                                onSetPadArticulation = onSetPadArticulation,
+                                onStrumTone = onStrumTone,
+                                onIntervalDown = onIntervalDown,
+                                onIntervalUp = onIntervalUp,
+                                onIntervalOneShot = onIntervalOneShot,
+                                modifier = Modifier.weight(1f).fillMaxWidth(),
+                            )
+                        }
+                        PerformancePage.MIDI -> MidiConsole(
+                            state = projections.console.value,
+                            onClose = { selectedPage = PerformancePage.INTERVAL },
+                            onSetScale = onSetScale,
+                            onSetRoot = onSetRoot,
+                            onSetChord = onSetChord,
+                            onSetRange = onSetRange,
+                            onSetWrap = onSetWrap,
+                            onSetInputChannel = onSetInputChannel,
+                            onSetOutputChannel = onSetOutputChannel,
+                            onSetMode = onSetMode,
+                            onSelectSource = onSelectSource,
+                            onSelectDestination = onSelectDestination,
+                            onResetMidiMapping = onResetMidiMapping,
+                            onOpenMidiMappingEditor = onOpenMidiMappingEditor,
+                            onTogglePerformanceLock = onTogglePerformanceLock,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        PerformancePage.SYNTH -> SynthPanel(
+                            state = projections.synth.value,
+                            compact = compact,
+                            onClose = { selectedPage = PerformancePage.INTERVAL },
+                            onPatchPreview = onSynthPatchPreview,
+                            onPatchChangeFinished = onSynthPatchChangeFinished,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        PerformancePage.ARPEGGIATOR -> ArpeggiatorPanel(
+                            state = projections.arpeggiator.value,
+                            onClose = { selectedPage = PerformancePage.INTERVAL },
+                            onSetConfig = onSetArpeggiatorConfig,
+                            onSetTempo = onSetTempo,
+                            onSetDivision = onSetClockDivision,
+                            onSetGate = onSetArpeggioGate,
+                            onSetTimeSignature = onSetTimeSignature,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+
+                    PerformanceOverlay(
+                        consoleState = projections.console,
+                        midiMappingEditorState = projections.midiMappingEditor,
+                        synthState = projections.synth,
+                        toneRowContentState = toneRowContentState,
+                        toneRowCursorState = toneRowCursorState,
+                        lockState = projections.lock,
+                        arrangementOpen = toneRowArrangementOpen,
+                        consoleOpen = false,
+                        synthOpen = false,
+                        compact = compact,
+                        availableWidth = availableWidth,
+                        onCloseArrangement = { toneRowArrangementOpen = false },
+                        onCloseConsole = { selectedPage = PerformancePage.INTERVAL },
+                        onCloseSynth = { selectedPage = PerformancePage.INTERVAL },
+                        onToneRowIntent = onToneRowIntent,
+                        onSetScale = onSetScale,
+                        onSetRoot = onSetRoot,
+                        onSetChord = onSetChord,
+                        onSetRange = onSetRange,
+                        onSetWrap = onSetWrap,
+                        onSetInputChannel = onSetInputChannel,
+                        onSetOutputChannel = onSetOutputChannel,
+                        onSetMode = onSetMode,
+                        onSelectSource = onSelectSource,
+                        onSelectDestination = onSelectDestination,
+                        onResetMidiMapping = onResetMidiMapping,
+                        onOpenMidiMappingEditor = onOpenMidiMappingEditor,
+                        onMidiMappingEditorAction = onMidiMappingEditorAction,
+                        onSaveMidiMappingEditor = onSaveMidiMappingEditor,
+                        onTogglePerformanceLock = onTogglePerformanceLock,
+                        onSynthPatchPreview = onSynthPatchPreview,
+                        onSynthPatchChangeFinished = onSynthPatchChangeFinished,
+                    )
+                }
+                ProjectedStatusBanner(state = projections.status, onDismiss = onDismissStatus)
+            }
+        }
+    }
+}
+
+@Composable
+private fun UnifiedTopBar(
+    pitch: PerformancePitchUiState,
+    header: PerformanceHeaderUiState,
+    utility: PerformanceUtilityUiState,
+    controls: PerformanceControlsUiState,
+    selectedPage: PerformancePage,
+    compact: Boolean,
+    onSelectPage: (PerformancePage) -> Unit,
+    onHome: () -> Unit,
+    onUndo: () -> Unit,
+    onPanic: () -> Unit,
+    onToggleAudio: () -> Unit,
+    onSetTempo: (Int) -> Unit,
+    onSetTimeSignature: (Int, Int) -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = StageShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "${pitch.currentNoteName} · ${header.rootName} ${header.scaleName}",
+                        style = if (compact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Black,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        header.chordName,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+                TextButton(
+                    onClick = { onSetTempo((header.tempoBpm - 1).coerceAtLeast(20)) },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                ) { Text("−") }
+                Text(
+                    "${header.tempoBpm} BPM",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                TextButton(
+                    onClick = { onSetTempo((header.tempoBpm + 1).coerceAtMost(300)) },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                ) { Text("+") }
+                OutlinedButton(
+                    onClick = {
+                        val next = if (header.beatsPerBar == 12) 1 else header.beatsPerBar + 1
+                        onSetTimeSignature(next, header.beatUnit)
+                    },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                    shape = ControlShape,
+                ) {
+                    Text("${header.beatsPerBar}/${header.beatUnit}")
+                }
+                Button(
+                    onClick = onToggleAudio,
+                    modifier = Modifier.heightIn(min = 48.dp),
+                    shape = ControlShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (header.audioMonitorEnabled) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.secondary
+                        },
+                    ),
+                ) {
+                    Text(if (header.audioMonitorEnabled) "Mute" else "Son")
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                OutlinedButton(
+                    onClick = onHome,
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                    shape = ControlShape,
+                    contentPadding = PaddingValues(horizontal = 3.dp),
+                ) { Text("Home", maxLines = 1) }
+                OutlinedButton(
+                    onClick = onUndo,
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                    shape = ControlShape,
+                    contentPadding = PaddingValues(horizontal = 3.dp),
+                ) { Text(if (utility.restartMode) "Restart" else "Undo", maxLines = 1) }
+                Button(
+                    onClick = onPanic,
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                    shape = ControlShape,
+                    contentPadding = PaddingValues(horizontal = 3.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                ) { Text("Panic", maxLines = 1) }
+                PerformancePage.entries.forEach { page ->
+                    val label = when (page) {
+                        PerformancePage.INTERVAL -> "Interval"
+                        PerformancePage.MIDI -> "MIDI"
+                        PerformancePage.SYNTH -> "Synthé"
+                        PerformancePage.ARPEGGIATOR -> "Arp"
+                    }
+                    FilterChip(
+                        selected = selectedPage == page,
+                        onClick = { onSelectPage(page) },
+                        enabled = page == PerformancePage.INTERVAL ||
+                            controls.settingsLoaded && !controls.performanceLock,
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp)
+                            .then(
+                                if (page == PerformancePage.SYNTH) {
+                                    Modifier.testTag(SynthPanelOpenTestTag)
+                                } else {
+                                    Modifier
+                                },
+                            ),
+                        label = {
+                            Text(
+                                label,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
+                            )
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun V24PerformanceStrip(
+    toneRow: ToneRowContentUiState,
+    articulation: PadArticulation,
+    performanceLock: Boolean,
+    onIntent: (ToneRowUiIntent) -> Unit,
+    onSetArticulation: (PadArticulation) -> Unit,
+    onOpenArrangement: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+        shape = ControlShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val isRunning = toneRow.phase == ToneRowUiPhase.AUTO_PLAYING
+            CompactStripChip(
+                label = "●",
+                description = stringResource(R.string.tone_row_record_description),
+                selected = toneRow.phase == ToneRowUiPhase.RECORDING,
+                enabled = toneRow.available && !isRunning,
+                onClick = { onIntent(ToneRowUiIntent.Record) },
+                modifier = Modifier.weight(1f),
+            )
+            CompactStripChip(
+                label = if (isRunning) "Ⅱ" else "▶",
+                description = stringResource(
+                    if (isRunning) R.string.tone_row_pause_description else R.string.tone_row_play_description,
+                ),
+                selected = isRunning,
+                enabled = toneRow.available && toneRow.row.isNotEmpty(),
+                onClick = { onIntent(ToneRowUiIntent.PlayPause) },
+                modifier = Modifier.weight(1f),
+            )
+            CompactStripChip(
+                label = "■",
+                description = stringResource(R.string.tone_row_stop_description),
+                selected = false,
+                enabled = toneRow.available,
+                onClick = { onIntent(ToneRowUiIntent.Stop) },
+                modifier = Modifier.weight(1f),
+            )
+            PadArticulation.entries.forEach { option ->
+                CompactStripChip(
+                    label = when (option) {
+                        PadArticulation.ARPEGGIATED -> "Arp"
+                        PadArticulation.STACKED -> "Acc"
+                        PadArticulation.MUTED -> "Muet"
+                    },
+                    description = articulationDescription(option),
+                    selected = articulation == option,
+                    enabled = toneRow.available,
+                    onClick = { onSetArticulation(option) },
+                    modifier = Modifier.weight(1f).testTag(articulationModeTestTag(option)),
+                )
+            }
+            CompactStripChip(
+                label = "Régl.",
+                description = stringResource(R.string.tone_row_arrangement_description),
+                selected = false,
+                enabled = toneRow.available && !performanceLock,
+                onClick = onOpenArrangement,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun CompactStripChip(
+    label: String,
+    description: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .semantics { contentDescription = description },
+        label = {
+            Text(
+                label,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+    )
+}
+
+@Composable
+private fun V24IntervalStage(
+    projections: PerformanceUiProjections,
+    portrait: Boolean,
+    compact: Boolean,
+    sectionGap: Dp,
+    onSetScale: (ScaleDefinition) -> Unit,
+    onSetChord: (ChordDefinition) -> Unit,
+    onSetForceToScale: (Boolean) -> Unit,
+    onSetPadArticulation: (PadArticulation) -> Unit,
+    onStrumTone: (Int, Int) -> Unit,
+    onIntervalDown: (Long, Int) -> Unit,
+    onIntervalUp: (Long) -> Unit,
+    onIntervalOneShot: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier) {
+        StageBackdrop(Modifier.fillMaxSize())
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(sectionGap),
+        ) {
+            ProjectedHarmonySurface(
+                state = projections.controls,
+                onSetScale = onSetScale,
+                onSetChord = onSetChord,
+                onSetForceToScale = onSetForceToScale,
+                portraitTwoHanded = true,
+                chordColumns = if (portrait) 2 else 5,
+                scaleColumns = if (portrait) 3 else 5,
+                modifier = Modifier
+                    .weight(if (portrait) 0.37f else 0.34f)
+                    .fillMaxHeight()
+                    .testTag(HarmonyHandPaneTestTag),
+            )
+            ProjectedStrummerLane(
+                state = projections.articulation,
+                orientation = StrummerOrientation.VERTICAL,
+                showArticulationSelector = false,
+                onSetArticulation = onSetPadArticulation,
+                onStrumTone = onStrumTone,
+                modifier = Modifier
+                    .weight(if (portrait) 0.15f else 0.12f)
+                    .fillMaxHeight(),
+            )
+            Surface(
+                modifier = Modifier
+                    .weight(if (portrait) 0.48f else 0.54f)
+                    .fillMaxHeight()
+                    .testTag(IntervalHandPaneTestTag),
+                shape = StageShape,
+                color = MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.90f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.performance_right_hand_intervals).uppercase(),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Black,
+                    )
+                    ProjectedIntervalGrid(
+                        pads = projections.pads,
+                        compact = compact,
+                        onDown = onIntervalDown,
+                        onUp = onIntervalUp,
+                        onOneShot = onIntervalOneShot,
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArpeggiatorPanel(
+    state: PerformanceArpeggiatorUiState,
+    onClose: () -> Unit,
+    onSetConfig: (ArpeggiatorConfig) -> Unit,
+    onSetTempo: (Int) -> Unit,
+    onSetDivision: (Int) -> Unit,
+    onSetGate: (Int) -> Unit,
+    onSetTimeSignature: (Int, Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = StageShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.72f)),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Arpégiateur", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
+                    Text(
+                        "Ordre, registre et motif rythmique du pad Arpégé — indépendant de Tone Row.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(onClick = onClose, modifier = Modifier.heightIn(min = 48.dp)) { Text("Interval") }
+            }
+            Column(
+                modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                SectionTitle("Tempo et mesure")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(
+                        onClick = { onSetTempo((state.tempoBpm - 1).coerceAtLeast(20)) },
+                        modifier = Modifier.heightIn(min = 48.dp),
+                    ) { Text("−") }
+                    Text("${state.tempoBpm} BPM", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    TextButton(
+                        onClick = { onSetTempo((state.tempoBpm + 1).coerceAtMost(300)) },
+                        modifier = Modifier.heightIn(min = 48.dp),
+                    ) { Text("+") }
+                    Spacer(Modifier.weight(1f))
+                    TextButton(
+                        onClick = {
+                            onSetTimeSignature(
+                                if (state.beatsPerBar == 12) 1 else state.beatsPerBar + 1,
+                                state.beatUnit,
+                            )
+                        },
+                        modifier = Modifier.heightIn(min = 48.dp),
+                    ) { Text("${state.beatsPerBar}/${state.beatUnit}") }
+                    TextButton(
+                        onClick = {
+                            val units = listOf(2, 4, 8, 16)
+                            val next = units[(units.indexOf(state.beatUnit) + 1) % units.size]
+                            onSetTimeSignature(state.beatsPerBar, next)
+                        },
+                        modifier = Modifier.heightIn(min = 48.dp),
+                    ) { Text("Unité suivante") }
+                }
+                SectionTitle("Division")
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(3, 4, 6, 8, 12, 16, 24).forEach { clocks ->
+                        FilterChip(
+                            selected = state.clocksPerStep == clocks,
+                            onClick = { onSetDivision(clocks) },
+                            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                            label = {
+                                Text(
+                                    clockDivisionLabel(clocks),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.Center,
+                                )
+                            },
+                        )
+                    }
+                }
+                SectionTitle("Gate · ${state.gatePercent} %")
+                Slider(
+                    value = state.gatePercent.toFloat(),
+                    onValueChange = { onSetGate(it.roundToInt()) },
+                    valueRange = 1f..100f,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                SectionTitle("Ordre")
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ArpeggioOrder.entries.forEach { order ->
+                        val label = when (order) {
+                            ArpeggioOrder.AS_PLAYED -> "Accord"
+                            ArpeggioOrder.UP -> "Montant"
+                            ArpeggioOrder.DOWN -> "Descendant"
+                            ArpeggioOrder.UP_DOWN -> "Aller-retour"
+                        }
+                        FilterChip(
+                            selected = state.config.order == order,
+                            onClick = { onSetConfig(state.config.copy(order = order)) },
+                            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                            label = { Text(label, maxLines = 1) },
+                        )
+                    }
+                }
+                SectionTitle("Octaves")
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    (1..3).forEach { octaves ->
+                        FilterChip(
+                            selected = state.config.octaveSpan == octaves,
+                            onClick = { onSetConfig(state.config.copy(octaveSpan = octaves)) },
+                            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                            label = { Text("$octaves") },
+                        )
+                    }
+                }
+                SectionTitle("Motif rythmique · 8 pas")
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    state.config.stepEnabled.forEachIndexed { index, enabled ->
+                        FilterChip(
+                            selected = enabled,
+                            enabled = enabled || state.config.stepEnabled.count { it } > 1,
+                            onClick = {
+                                val pattern = state.config.stepEnabled.toMutableList()
+                                pattern[index] = !enabled
+                                onSetConfig(state.config.copy(stepEnabled = pattern))
+                            },
+                            modifier = Modifier.weight(1f).heightIn(min = 56.dp),
+                            label = {
+                                Text(
+                                    if (enabled) "${index + 1} · ON" else "${index + 1} · —",
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.Center,
+                                )
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LegacyProjectedPerformanceScreen(
+    projections: PerformanceUiProjections,
+    toneRowContentState: State<ToneRowContentUiState> = projections.toneRowContent,
+    toneRowCursorState: State<ToneRowCursorUiState> = projections.toneRowCursor,
+    onToneRowIntent: (ToneRowUiIntent) -> Unit,
+    onSetPadArticulation: (PadArticulation) -> Unit,
+    onStrumTone: (toneIndex: Int, velocity: Int) -> Unit,
+    onIntervalDown: (pointerId: Long, steps: Int) -> Unit,
+    onIntervalUp: (pointerId: Long) -> Unit,
+    onIntervalOneShot: (steps: Int) -> Unit,
+    onUndo: () -> Unit,
+    onHome: () -> Unit,
+    onPanic: () -> Unit,
+    onSetScale: (ScaleDefinition) -> Unit,
+    onSetRoot: (Int) -> Unit,
+    onSetChord: (ChordDefinition) -> Unit,
+    onSetForceToScale: (Boolean) -> Unit = {},
+    onSetArpeggiatorConfig: (ArpeggiatorConfig) -> Unit = {},
+    onSetTempo: (Int) -> Unit = {},
+    onSetClockDivision: (Int) -> Unit = {},
+    onSetArpeggioGate: (Int) -> Unit = {},
+    onSetTimeSignature: (Int, Int) -> Unit = { _, _ -> },
     onSetRange: (MidiNoteRange) -> Unit,
     onSetWrap: (Boolean) -> Unit,
     onSetInputChannel: (Int?) -> Unit,
@@ -605,6 +1304,7 @@ private fun ProjectedIntervalGrid(
 private fun ProjectedStrummerLane(
     state: State<PerformanceArticulationUiState>,
     orientation: StrummerOrientation,
+    showArticulationSelector: Boolean = true,
     onSetArticulation: (PadArticulation) -> Unit,
     onStrumTone: (toneIndex: Int, velocity: Int) -> Unit,
     modifier: Modifier = Modifier,
@@ -612,6 +1312,7 @@ private fun ProjectedStrummerLane(
     StrummerLane(
         state = state.value,
         orientation = orientation,
+        showArticulationSelector = showArticulationSelector,
         onSetArticulation = onSetArticulation,
         onStrumTone = onStrumTone,
         modifier = modifier,
@@ -1144,6 +1845,7 @@ private fun UtilityRail(
 private fun StrummerLane(
     state: PerformanceArticulationUiState,
     orientation: StrummerOrientation,
+    showArticulationSelector: Boolean = true,
     onSetArticulation: (PadArticulation) -> Unit,
     onStrumTone: (toneIndex: Int, velocity: Int) -> Unit,
     modifier: Modifier = Modifier,
@@ -1168,11 +1870,13 @@ private fun StrummerLane(
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                 )
-                ArticulationSelector(
-                    selected = state.articulation,
-                    onSelect = onSetArticulation,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                if (showArticulationSelector) {
+                    ArticulationSelector(
+                        selected = state.articulation,
+                        onSelect = onSetArticulation,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
                 StrummerToneSurface(
                     state = state,
                     orientation = orientation,
@@ -2250,6 +2954,72 @@ private fun SynthPanel(
             parameter = SynthParameter.RELEASE,
         ),
     )
+    val filterEnvelopeControls = listOf(
+        logarithmicSynthControl(
+            key = SynthParameter.FILTER_ATTACK.name,
+            label = "Filtre · attaque",
+            valueText = stringResource(R.string.synth_value_seconds, draftPatch.filterAttackSeconds),
+            patch = draftPatch,
+            parameter = SynthParameter.FILTER_ATTACK,
+        ),
+        logarithmicSynthControl(
+            key = SynthParameter.FILTER_DECAY.name,
+            label = "Filtre · déclin",
+            valueText = stringResource(R.string.synth_value_seconds, draftPatch.filterDecaySeconds),
+            patch = draftPatch,
+            parameter = SynthParameter.FILTER_DECAY,
+        ),
+        directSynthControl(
+            key = SynthParameter.FILTER_SUSTAIN.name,
+            label = "Filtre · maintien",
+            valueText = stringResource(
+                R.string.synth_value_percent,
+                (draftPatch.filterSustain * 100f).roundToInt(),
+            ),
+            patch = draftPatch,
+            parameter = SynthParameter.FILTER_SUSTAIN,
+        ),
+        logarithmicSynthControl(
+            key = SynthParameter.FILTER_RELEASE.name,
+            label = "Filtre · relâchement",
+            valueText = stringResource(R.string.synth_value_seconds, draftPatch.filterReleaseSeconds),
+            patch = draftPatch,
+            parameter = SynthParameter.FILTER_RELEASE,
+        ),
+        directSynthControl(
+            key = SynthParameter.FILTER_ENV_AMOUNT.name,
+            label = "Montant enveloppe",
+            valueText = draftPatch.filterEnvelopeAmount.toString() + " oct",
+            patch = draftPatch,
+            parameter = SynthParameter.FILTER_ENV_AMOUNT,
+        ),
+    )
+    val lfoControls = listOf(
+        logarithmicSynthControl(
+            key = SynthParameter.LFO_RATE.name,
+            label = "LFO · fréquence",
+            valueText = draftPatch.lfoRateHz.toString() + " Hz",
+            patch = draftPatch,
+            parameter = SynthParameter.LFO_RATE,
+        ),
+        directSynthControl(
+            key = SynthParameter.LFO_DEPTH.name,
+            label = "LFO · profondeur",
+            valueText = stringResource(
+                R.string.synth_value_percent,
+                (draftPatch.lfoDepth * 100f).roundToInt(),
+            ),
+            patch = draftPatch,
+            parameter = SynthParameter.LFO_DEPTH,
+        ),
+        directSynthControl(
+            key = SynthParameter.LFO_DELAY.name,
+            label = "LFO · délai",
+            valueText = stringResource(R.string.synth_value_seconds, draftPatch.lfoDelaySeconds),
+            patch = draftPatch,
+            parameter = SynthParameter.LFO_DELAY,
+        ),
+    )
     val effectControls = listOf(
         directSynthControl(
             key = SynthParameter.CHORUS_MIX.name,
@@ -2292,6 +3062,17 @@ private fun SynthPanel(
             parameter = SynthParameter.DELAY_MIX,
         ),
         directSynthControl(
+            key = SynthParameter.DELAY_SYNC_BEATS.name,
+            label = "Delay · rythme",
+            valueText = if (draftPatch.delaySyncBeats == 0f) {
+                "Libre"
+            } else {
+                draftPatch.delaySyncBeats.toString() + " temps"
+            },
+            patch = draftPatch,
+            parameter = SynthParameter.DELAY_SYNC_BEATS,
+        ),
+        directSynthControl(
             key = SynthParameter.REVERB_MIX.name,
             label = stringResource(R.string.synth_reverb),
             valueText = stringResource(
@@ -2310,6 +3091,16 @@ private fun SynthPanel(
             ),
             patch = draftPatch,
             parameter = SynthParameter.MASTER,
+        ),
+        directSynthControl(
+            key = SynthParameter.DRIVE.name,
+            label = "Drive de sortie",
+            valueText = stringResource(
+                R.string.synth_value_percent,
+                (draftPatch.drive * 100f).roundToInt(),
+            ),
+            patch = draftPatch,
+            parameter = SynthParameter.DRIVE,
         ),
     )
 
@@ -2339,6 +3130,13 @@ private fun SynthPanel(
         if (finalPreview != null) currentOnPatchPreview.value(finalPreview)
         gestureActive = false
         currentOnPatchChangeFinished.value(draftPatch)
+    }
+    val applyImmediatePatch: (SynthPatch) -> Unit = { patch ->
+        previewScheduler.cancel()
+        gestureActive = false
+        draftPatch = patch
+        currentOnPatchPreview.value(patch)
+        currentOnPatchChangeFinished.value(patch)
     }
 
     Surface(
@@ -2370,6 +3168,27 @@ private fun SynthPanel(
                 }
             }
 
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(SynthPresetLibrary.all, key = { it.id }) { preset ->
+                    FilterChip(
+                        selected = preset.patch == draftPatch,
+                        onClick = {
+                            applyImmediatePatch(
+                                preset.patch.withParameter(
+                                    SynthParameter.TEMPO_BPM,
+                                    draftPatch.tempoBpm,
+                                ),
+                            )
+                        },
+                        modifier = Modifier.heightIn(min = 48.dp),
+                        label = { Text(preset.displayName) },
+                    )
+                }
+            }
+
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -2385,7 +3204,15 @@ private fun SynthPanel(
                     onValueChangeFinished = finishGesture,
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                SectionTitle(stringResource(R.string.synth_section_envelope))
+                SectionTitle("Enveloppe du filtre")
+                SynthControlGrid(
+                    controls = filterEnvelopeControls,
+                    compact = compact,
+                    onValueChange = updateDraft,
+                    onValueChangeFinished = finishGesture,
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                SectionTitle("Enveloppe d’amplitude")
                 SynthControlGrid(
                     controls = envelopeControls,
                     compact = compact,
@@ -2393,7 +3220,54 @@ private fun SynthPanel(
                     onValueChangeFinished = finishGesture,
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                SectionTitle("LFO assignable")
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SynthLfoDestination.entries.forEach { destination ->
+                        val label = when (destination) {
+                            SynthLfoDestination.FILTER -> "Filtre"
+                            SynthLfoDestination.PULSE_WIDTH -> "Largeur pulse"
+                            SynthLfoDestination.DELAY_TIME -> "Temps delay"
+                        }
+                        FilterChip(
+                            selected = draftPatch.lfoDestination == destination,
+                            onClick = { applyImmediatePatch(draftPatch.copy(lfoDestination = destination)) },
+                            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                            label = { Text(label) },
+                        )
+                    }
+                }
+                SynthControlGrid(
+                    controls = lfoControls,
+                    compact = compact,
+                    onValueChange = updateDraft,
+                    onValueChangeFinished = finishGesture,
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 SectionTitle(stringResource(R.string.synth_section_effects))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(0f, 0.25f, 0.5f, 0.75f, 1f).forEach { beats ->
+                        FilterChip(
+                            selected = draftPatch.delaySyncBeats == beats,
+                            onClick = {
+                                applyImmediatePatch(
+                                    draftPatch.withParameter(SynthParameter.DELAY_SYNC_BEATS, beats),
+                                )
+                            },
+                            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                            label = {
+                                Text(
+                                    when (beats) {
+                                        0f -> "Libre"
+                                        0.25f -> "1/16"
+                                        0.5f -> "1/8"
+                                        0.75f -> "1/8."
+                                        else -> "1/4"
+                                    },
+                                )
+                            },
+                        )
+                    }
+                }
                 SynthControlGrid(
                     controls = effectControls,
                     compact = compact,

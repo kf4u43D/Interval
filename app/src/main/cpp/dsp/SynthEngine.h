@@ -27,6 +27,18 @@ enum class ParameterId : int {
     DelayMix = 13,
     ReverbMix = 14,
     Master = 15,
+    FilterAttack = 16,
+    FilterDecay = 17,
+    FilterSustain = 18,
+    FilterRelease = 19,
+    FilterEnvelopeAmount = 20,
+    Drive = 21,
+    LfoRate = 22,
+    LfoDepth = 23,
+    LfoDestination = 24,
+    LfoDelay = 25,
+    DelaySyncBeats = 26,
+    TempoBpm = 27,
 };
 
 class SynthVoice {
@@ -35,11 +47,25 @@ public:
         const float sampleRate,
         const Adsr::Coefficients& envelopeCoefficients,
         const StateVariableLowPass::Coefficients& filterCoefficients) noexcept {
+        prepare(
+            sampleRate,
+            envelopeCoefficients,
+            Adsr::makeCoefficients(sampleRate, 0.005F, 0.18F, 0.0F, 0.35F),
+            filterCoefficients);
+    }
+
+    void prepare(
+        const float sampleRate,
+        const Adsr::Coefficients& envelopeCoefficients,
+        const Adsr::Coefficients& filterEnvelopeCoefficients,
+        const StateVariableLowPass::Coefficients& filterCoefficients) noexcept {
         oscillator_.prepare(sampleRate);
         envelope_.prepare(sampleRate, envelopeCoefficients);
+        filterEnvelope_.prepare(sampleRate, filterEnvelopeCoefficients);
         filter_.prepare(sampleRate, filterCoefficients);
         active_ = false;
         age_ = 0;
+        filterUpdateCountdown_ = 0U;
     }
 
     void start(
@@ -52,19 +78,29 @@ public:
         age_ = age;
         oscillator_.setFrequency(frequency);
         envelope_.noteOn();
+        filterEnvelope_.noteOn();
+        filterUpdateCountdown_ = 0U;
         active_ = true;
     }
 
-    void release() noexcept { envelope_.noteOff(); }
+    void release() noexcept {
+        envelope_.noteOff();
+        filterEnvelope_.noteOff();
+    }
     void panic() noexcept {
         oscillator_.reset();
         envelope_.reset();
+        filterEnvelope_.reset();
         filter_.reset();
         active_ = false;
     }
 
     void setEnvelopeCoefficients(const Adsr::Coefficients& coefficients) noexcept {
         envelope_.setCoefficients(coefficients);
+    }
+
+    void setFilterEnvelopeCoefficients(const Adsr::Coefficients& coefficients) noexcept {
+        filterEnvelope_.setCoefficients(coefficients);
     }
 
     void setFilterCoefficients(const StateVariableLowPass::Coefficients& coefficients) noexcept {
@@ -75,12 +111,24 @@ public:
         const float sawMix,
         const float pulseMix,
         const float triangleMix,
-        const float pulseWidth) noexcept {
+        const float pulseWidth,
+        const float baseCutoff = 3500.0F,
+        const float filterEnvelopeAmount = 0.0F,
+        const float lfoFilterModulation = 0.0F) noexcept {
         if (!active_) return 0.0F;
         const float envelope = envelope_.process();
+        const float filterEnvelope = filterEnvelope_.process();
         if (!envelope_.isActive()) {
             active_ = false;
             return 0.0F;
+        }
+        if (filterUpdateCountdown_ == 0U) {
+            const float octaveOffset =
+                filterEnvelope * filterEnvelopeAmount + lfoFilterModulation * 3.0F;
+            filter_.setCutoff(baseCutoff * std::exp2(octaveOffset));
+            filterUpdateCountdown_ = 15U;
+        } else {
+            --filterUpdateCountdown_;
         }
         const float sample = oscillator_.process(sawMix, pulseMix, triangleMix, pulseWidth);
         return filter_.process(sample) * envelope * velocityGain_;
@@ -94,11 +142,13 @@ public:
 private:
     Oscillator oscillator_{};
     Adsr envelope_{};
+    Adsr filterEnvelope_{};
     StateVariableLowPass filter_{};
     int note_{-1};
     float velocityGain_{0.0F};
     std::uint64_t age_{0};
     bool active_{false};
+    std::uint8_t filterUpdateCountdown_{0U};
 };
 
 class SynthEngine {
@@ -139,6 +189,7 @@ public:
             noteFrequencies_[note] = midiToHz(static_cast<int>(note));
         }
         recomputeEnvelopeCoefficients();
+        recomputeFilterEnvelopeCoefficients();
         recomputeFilterCoefficients();
         recomputeNormalizedOscillatorMixes();
         smoothedSawMix_.prepare(sampleRate_);
@@ -150,13 +201,21 @@ public:
         smoothedTriangleMix_.reset(normalizedTriangleMix_);
         smoothedPulseWidth_.reset(pulseWidth_);
         for (auto& voice : voices_) {
-            voice.prepare(sampleRate_, envelopeCoefficients_, filterCoefficients_);
+            voice.prepare(
+                sampleRate_,
+                envelopeCoefficients_,
+                filterEnvelopeCoefficients_,
+                filterCoefficients_);
         }
         chorus_.prepare(sampleRate_, chorusMix_);
         delay_.prepare(sampleRate_, delayTimeSeconds_, delayFeedback_, delayMix_);
         reverb_.prepare(sampleRate_, reverbMix_);
         master_.prepare(sampleRate_);
         master_.reset(masterGain_);
+        drive_.prepare(sampleRate_);
+        drive_.reset(driveAmount_);
+        lfoPhase_ = 0.0F;
+        lfoDelaySamplesElapsed_ = 0U;
         ageCounter_ = 0;
 #if defined(INTERVAL_NATIVE_TESTING)
         resetOutputStatsForTesting();
@@ -173,6 +232,7 @@ public:
             ? preparedFrequency
             : midiToHz(boundedNote);
         voice->start(boundedNote, velocity, ++ageCounter_, frequency);
+        lfoDelaySamplesElapsed_ = 0U;
     }
 
     void noteOff(const int note) noexcept {
@@ -307,6 +367,64 @@ public:
                 master_.setTarget(bounded);
                 break;
             }
+            case ParameterId::FilterAttack: {
+                const float bounded = std::clamp(value, 0.0005F, 10.0F);
+                if (bounded == filterAttack_) break;
+                filterAttack_ = bounded;
+                recomputeAndApplyFilterEnvelopeCoefficients();
+                break;
+            }
+            case ParameterId::FilterDecay: {
+                const float bounded = std::clamp(value, 0.001F, 20.0F);
+                if (bounded == filterDecay_) break;
+                filterDecay_ = bounded;
+                recomputeAndApplyFilterEnvelopeCoefficients();
+                break;
+            }
+            case ParameterId::FilterSustain: {
+                const float bounded = clampUnit(value);
+                if (bounded == filterSustain_) break;
+                filterSustain_ = bounded;
+                recomputeAndApplyFilterEnvelopeCoefficients();
+                break;
+            }
+            case ParameterId::FilterRelease: {
+                const float bounded = std::clamp(value, 0.001F, 30.0F);
+                if (bounded == filterRelease_) break;
+                filterRelease_ = bounded;
+                recomputeAndApplyFilterEnvelopeCoefficients();
+                break;
+            }
+            case ParameterId::FilterEnvelopeAmount:
+                filterEnvelopeAmount_ = std::clamp(value, -4.0F, 4.0F);
+                break;
+            case ParameterId::Drive: {
+                const float bounded = clampUnit(value);
+                if (bounded == driveAmount_) break;
+                driveAmount_ = bounded;
+                drive_.setTarget(bounded);
+                break;
+            }
+            case ParameterId::LfoRate:
+                lfoRateHz_ = std::clamp(value, 0.05F, 20.0F);
+                break;
+            case ParameterId::LfoDepth:
+                lfoDepth_ = clampUnit(value);
+                break;
+            case ParameterId::LfoDestination:
+                lfoDestination_ = std::clamp(static_cast<int>(std::lround(value)), 0, 2);
+                break;
+            case ParameterId::LfoDelay:
+                lfoDelaySeconds_ = std::clamp(value, 0.0F, 10.0F);
+                break;
+            case ParameterId::DelaySyncBeats:
+                delaySyncBeats_ = std::clamp(value, 0.0F, 4.0F);
+                delay_.setSyncBeats(delaySyncBeats_);
+                break;
+            case ParameterId::TempoBpm:
+                tempoBpm_ = std::clamp(value, 20.0F, 300.0F);
+                delay_.setTempoBpm(tempoBpm_);
+                break;
         }
     }
 
@@ -315,17 +433,45 @@ public:
             const float sawMix = smoothedSawMix_.next();
             const float pulseMix = smoothedPulseMix_.next();
             const float triangleMix = smoothedTriangleMix_.next();
-            const float pulseWidth = smoothedPulseWidth_.next();
+            const std::uint64_t lfoDelaySamples = static_cast<std::uint64_t>(
+                lfoDelaySeconds_ * sampleRate_);
+            const float lfo = lfoDelaySamplesElapsed_ >= lfoDelaySamples
+                ? std::sin(2.0F * kPi * lfoPhase_) * lfoDepth_
+                : 0.0F;
+            lfoPhase_ += lfoRateHz_ / sampleRate_;
+            if (lfoPhase_ >= 1.0F) lfoPhase_ -= 1.0F;
+            if (lfoDelaySamplesElapsed_ < UINT64_MAX) ++lfoDelaySamplesElapsed_;
+            const float lfoFilter = lfoDestination_ == 0 ? lfo : 0.0F;
+            const float lfoPulseWidth = lfoDestination_ == 1 ? lfo * 0.40F : 0.0F;
+            const float lfoDelay = lfoDestination_ == 2 ? lfo : 0.0F;
+            const float pulseWidth = std::clamp(
+                smoothedPulseWidth_.next() + lfoPulseWidth,
+                0.05F,
+                0.95F);
             float mono = 0.0F;
             for (auto& voice : voices_) {
-                mono += voice.process(sawMix, pulseMix, triangleMix, pulseWidth);
+                mono += voice.process(
+                    sawMix,
+                    pulseMix,
+                    triangleMix,
+                    pulseWidth,
+                    cutoff_,
+                    filterEnvelopeAmount_,
+                    lfoFilter);
             }
             mono *= 0.18F;
             float left = 0.0F;
             float right = 0.0F;
             chorus_.process(mono, left, right);
-            delay_.process(left, right);
+            delay_.process(left, right, lfoDelay);
             reverb_.process(left, right);
+            const float drive = drive_.next();
+            if (drive > 0.0001F) {
+                const float driveGain = 1.0F + drive * 7.0F;
+                const float normalization = std::tanh(driveGain);
+                left = std::tanh(left * driveGain) / normalization;
+                right = std::tanh(right * driveGain) / normalization;
+            }
             const float master = master_.next();
             const float preLimitedLeft = left * master;
             const float preLimitedRight = right * master;
@@ -424,6 +570,22 @@ private:
 #endif
     }
 
+    void recomputeFilterEnvelopeCoefficients() noexcept {
+        filterEnvelopeCoefficients_ = Adsr::makeCoefficients(
+            sampleRate_,
+            filterAttack_,
+            filterDecay_,
+            filterSustain_,
+            filterRelease_);
+    }
+
+    void recomputeAndApplyFilterEnvelopeCoefficients() noexcept {
+        recomputeFilterEnvelopeCoefficients();
+        for (auto& voice : voices_) {
+            voice.setFilterEnvelopeCoefficients(filterEnvelopeCoefficients_);
+        }
+    }
+
     void recomputeFilterCoefficients() noexcept {
         filterCoefficients_ = StateVariableLowPass::makeCoefficients(
             sampleRate_,
@@ -472,11 +634,13 @@ private:
     std::array<SynthVoice, kVoiceCount> voices_{};
     std::array<float, 128> noteFrequencies_{};
     Adsr::Coefficients envelopeCoefficients_{};
+    Adsr::Coefficients filterEnvelopeCoefficients_{};
     StateVariableLowPass::Coefficients filterCoefficients_{};
     StereoChorus chorus_{};
     StereoDelay delay_{};
     StereoReverb reverb_{};
     SmoothedValue master_{};
+    SmoothedValue drive_{};
     std::uint64_t ageCounter_{0};
     float sawMix_{0.65F};
     float pulseMix_{0.20F};
@@ -501,6 +665,20 @@ private:
     float delayMix_{StereoDelay::kDefaultMix};
     float reverbMix_{StereoReverb::kDefaultMix};
     float masterGain_{0.35F};
+    float filterAttack_{0.005F};
+    float filterDecay_{0.18F};
+    float filterSustain_{0.0F};
+    float filterRelease_{0.35F};
+    float filterEnvelopeAmount_{0.0F};
+    float driveAmount_{0.0F};
+    float lfoRateHz_{2.0F};
+    float lfoDepth_{0.0F};
+    int lfoDestination_{0};
+    float lfoDelaySeconds_{0.0F};
+    float delaySyncBeats_{0.0F};
+    float tempoBpm_{120.0F};
+    float lfoPhase_{0.0F};
+    std::uint64_t lfoDelaySamplesElapsed_{0U};
 #if defined(INTERVAL_NATIVE_TESTING)
     ParameterWorkCounters parameterWorkCounters_{};
     float maximumPreLimiterMagnitudeForTesting_{0.0F};

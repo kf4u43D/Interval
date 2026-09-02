@@ -12,6 +12,16 @@ enum class TransportMode { STOPPED, PLAYING, PAUSED }
 /** Exactly one clock source can own musical ticks at a time. */
 enum class ClockSource { INTERNAL, MIDI }
 
+data class TimeSignature(
+    val beatsPerBar: Int = 4,
+    val beatUnit: Int = 4,
+) {
+    init {
+        require(beatsPerBar in 1..12)
+        require(beatUnit in setOf(2, 4, 8, 16))
+    }
+}
+
 data class TransportState(
     val mode: TransportMode = TransportMode.STOPPED,
     val clockSource: ClockSource = ClockSource.INTERNAL,
@@ -20,6 +30,7 @@ data class TransportState(
     val clocksPerStep: Int = 6,
     val tempoBpm: Int = 120,
     val noteDurationPercent: Int = 75,
+    val timeSignature: TimeSignature = TimeSignature(),
     val nextInternalTickNanos: Long? = null,
     val lastInternalInputTimestampNanos: Long? = null,
     val lastMidiInputTimestampNanos: Long? = null,
@@ -87,6 +98,8 @@ sealed interface TransportAction {
             require(percent in 1..100)
         }
     }
+
+    data class SetTimeSignature(val signature: TimeSignature) : TransportAction
 
     /** Start resets the musical position before playback. */
     data class Start(val timestampNanos: Long) : TransportAction {
@@ -166,6 +179,9 @@ class TransportReducer {
             )
             is TransportAction.SetNoteDuration -> TransportTransition(
                 state.copy(noteDurationPercent = action.percent),
+            )
+            is TransportAction.SetTimeSignature -> TransportTransition(
+                state.copy(timeSignature = action.signature),
             )
             is TransportAction.Start -> start(state, action.timestampNanos)
             is TransportAction.Continue -> continuePlayback(state, action.timestampNanos)

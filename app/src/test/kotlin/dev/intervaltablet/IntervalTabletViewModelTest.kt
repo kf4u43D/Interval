@@ -828,7 +828,10 @@ class IntervalTabletViewModelTest {
         fixture.viewModel.setSynthPatch(finalPatch)
         drain()
         assertEquals(finalPatch, fixture.viewModel.uiState.value.synthPatch)
-        assertEquals(finalPatch.toAudioCommands(), fixture.audio.commands.takeLast(16))
+        assertEquals(
+            finalPatch.toAudioCommands(),
+            fixture.audio.commands.takeLast(SynthParameter.entries.size),
+        )
         assertTrue(fixture.settingsStore.updates.isEmpty())
 
         scheduler.advanceTimeBy(200L)
@@ -858,7 +861,10 @@ class IntervalTabletViewModelTest {
         drain()
 
         assertEquals(initialPatch, fixture.viewModel.uiState.value.synthPatch)
-        assertEquals(initialPatch.toAudioCommands(), fixture.audio.commands.takeLast(16))
+        assertEquals(
+            initialPatch.toAudioCommands(),
+            fixture.audio.commands.takeLast(SynthParameter.entries.size),
+        )
         scheduler.advanceTimeBy(200L)
         drain()
         assertTrue(fixture.settingsStore.updates.isEmpty())
@@ -895,6 +901,7 @@ class IntervalTabletViewModelTest {
             listOf(60),
             fixture.audio.commands.filterIsInstance<AudioCommand.NoteOn>().map { it.note },
         )
+        assertEquals(0, fixture.viewModel.uiState.value.instrument.activeInstanceCount)
 
         scheduler.advanceTimeBy(1L)
         drain()

@@ -28,6 +28,18 @@ enum class SynthParameter(
     DELAY_MIX(13, 0.0F, 1.0F, 0.16F),
     REVERB_MIX(14, 0.0F, 1.0F, 0.20F),
     MASTER(15, 0.0F, 1.5F, 0.35F),
+    FILTER_ATTACK(16, 0.0005F, 10.0F, 0.005F),
+    FILTER_DECAY(17, 0.001F, 20.0F, 0.18F),
+    FILTER_SUSTAIN(18, 0.0F, 1.0F, 0.0F),
+    FILTER_RELEASE(19, 0.001F, 30.0F, 0.35F),
+    FILTER_ENV_AMOUNT(20, -4.0F, 4.0F, 0.0F),
+    DRIVE(21, 0.0F, 1.0F, 0.0F),
+    LFO_RATE(22, 0.05F, 20.0F, 2.0F),
+    LFO_DEPTH(23, 0.0F, 1.0F, 0.0F),
+    LFO_DESTINATION(24, 0.0F, 2.0F, 0.0F),
+    LFO_DELAY(25, 0.0F, 10.0F, 0.0F),
+    DELAY_SYNC_BEATS(26, 0.0F, 4.0F, 0.0F),
+    TEMPO_BPM(27, 20.0F, 300.0F, 120.0F),
     ;
 
     init {
@@ -45,6 +57,19 @@ enum class SynthParameter(
     }
 
     fun accepts(value: Float): Boolean = value.isFinite() && value in minimum..maximum
+}
+
+enum class SynthLfoDestination(val wireValue: Float) {
+    FILTER(0.0F),
+    PULSE_WIDTH(1.0F),
+    DELAY_TIME(2.0F),
+    ;
+
+    companion object {
+        fun fromWire(value: Float): SynthLfoDestination = entries[
+            value.toInt().coerceIn(0, entries.lastIndex)
+        ]
+    }
 }
 
 /** Canonical, device-independent patch. Values use the native wire units. */
@@ -65,6 +90,18 @@ data class SynthPatch(
     val delayMix: Float = SynthParameter.DELAY_MIX.defaultValue,
     val reverbMix: Float = SynthParameter.REVERB_MIX.defaultValue,
     val masterGain: Float = SynthParameter.MASTER.defaultValue,
+    val filterAttackSeconds: Float = SynthParameter.FILTER_ATTACK.defaultValue,
+    val filterDecaySeconds: Float = SynthParameter.FILTER_DECAY.defaultValue,
+    val filterSustain: Float = SynthParameter.FILTER_SUSTAIN.defaultValue,
+    val filterReleaseSeconds: Float = SynthParameter.FILTER_RELEASE.defaultValue,
+    val filterEnvelopeAmount: Float = SynthParameter.FILTER_ENV_AMOUNT.defaultValue,
+    val drive: Float = SynthParameter.DRIVE.defaultValue,
+    val lfoRateHz: Float = SynthParameter.LFO_RATE.defaultValue,
+    val lfoDepth: Float = SynthParameter.LFO_DEPTH.defaultValue,
+    val lfoDestination: SynthLfoDestination = SynthLfoDestination.FILTER,
+    val lfoDelaySeconds: Float = SynthParameter.LFO_DELAY.defaultValue,
+    val delaySyncBeats: Float = SynthParameter.DELAY_SYNC_BEATS.defaultValue,
+    val tempoBpm: Float = SynthParameter.TEMPO_BPM.defaultValue,
 ) {
     init {
         SynthParameter.entries.forEach { parameter ->
@@ -91,6 +128,18 @@ data class SynthPatch(
         SynthParameter.DELAY_MIX -> delayMix
         SynthParameter.REVERB_MIX -> reverbMix
         SynthParameter.MASTER -> masterGain
+        SynthParameter.FILTER_ATTACK -> filterAttackSeconds
+        SynthParameter.FILTER_DECAY -> filterDecaySeconds
+        SynthParameter.FILTER_SUSTAIN -> filterSustain
+        SynthParameter.FILTER_RELEASE -> filterReleaseSeconds
+        SynthParameter.FILTER_ENV_AMOUNT -> filterEnvelopeAmount
+        SynthParameter.DRIVE -> drive
+        SynthParameter.LFO_RATE -> lfoRateHz
+        SynthParameter.LFO_DEPTH -> lfoDepth
+        SynthParameter.LFO_DESTINATION -> lfoDestination.wireValue
+        SynthParameter.LFO_DELAY -> lfoDelaySeconds
+        SynthParameter.DELAY_SYNC_BEATS -> delaySyncBeats
+        SynthParameter.TEMPO_BPM -> tempoBpm
     }
 
     fun withParameter(parameter: SynthParameter, value: Float): SynthPatch {
@@ -112,6 +161,20 @@ data class SynthPatch(
             SynthParameter.DELAY_MIX -> copy(delayMix = sanitized)
             SynthParameter.REVERB_MIX -> copy(reverbMix = sanitized)
             SynthParameter.MASTER -> copy(masterGain = sanitized)
+            SynthParameter.FILTER_ATTACK -> copy(filterAttackSeconds = sanitized)
+            SynthParameter.FILTER_DECAY -> copy(filterDecaySeconds = sanitized)
+            SynthParameter.FILTER_SUSTAIN -> copy(filterSustain = sanitized)
+            SynthParameter.FILTER_RELEASE -> copy(filterReleaseSeconds = sanitized)
+            SynthParameter.FILTER_ENV_AMOUNT -> copy(filterEnvelopeAmount = sanitized)
+            SynthParameter.DRIVE -> copy(drive = sanitized)
+            SynthParameter.LFO_RATE -> copy(lfoRateHz = sanitized)
+            SynthParameter.LFO_DEPTH -> copy(lfoDepth = sanitized)
+            SynthParameter.LFO_DESTINATION -> copy(
+                lfoDestination = SynthLfoDestination.fromWire(sanitized),
+            )
+            SynthParameter.LFO_DELAY -> copy(lfoDelaySeconds = sanitized)
+            SynthParameter.DELAY_SYNC_BEATS -> copy(delaySyncBeats = sanitized)
+            SynthParameter.TEMPO_BPM -> copy(tempoBpm = sanitized)
         }
     }
 
@@ -153,4 +216,104 @@ data class SynthPatch(
         const val TIMBRE_MINIMUM_PULSE_WIDTH: Float = 0.40F
         const val TIMBRE_PULSE_WIDTH_SPAN: Float = 0.50F
     }
+}
+
+data class SynthPreset(
+    val id: String,
+    val displayName: String,
+    val patch: SynthPatch,
+) {
+    init {
+        require(id.isNotBlank())
+        require(displayName.isNotBlank())
+    }
+}
+
+/** Original built-in examples; recalling one simply installs its patch as the global sound. */
+object SynthPresetLibrary {
+    val all: List<SynthPreset> = listOf(
+        SynthPreset("initial", "Initial", SynthPatch()),
+        SynthPreset(
+            "velours",
+            "Velours",
+            SynthPatch(
+                sawMix = 0.35F,
+                pulseMix = 0.15F,
+                triangleMix = 0.50F,
+                attackSeconds = 0.65F,
+                releaseSeconds = 1.8F,
+                cutoffHz = 2_200F,
+                chorusMix = 0.32F,
+                reverbMix = 0.34F,
+            ),
+        ),
+        SynthPreset(
+            "pique",
+            "Piqué",
+            SynthPatch(
+                sawMix = 0.72F,
+                pulseMix = 0.22F,
+                triangleMix = 0.06F,
+                decaySeconds = 0.11F,
+                sustain = 0.18F,
+                releaseSeconds = 0.12F,
+                cutoffHz = 6_800F,
+                filterDecaySeconds = 0.16F,
+                filterEnvelopeAmount = 2.4F,
+                drive = 0.12F,
+            ),
+        ),
+        SynthPreset(
+            "basse_ronde",
+            "Basse ronde",
+            SynthPatch(
+                sawMix = 0.20F,
+                pulseMix = 0.18F,
+                triangleMix = 0.62F,
+                cutoffHz = 780F,
+                resonance = 0.24F,
+                sustain = 0.82F,
+                drive = 0.22F,
+                masterGain = 0.42F,
+            ),
+        ),
+        SynthPreset(
+            "nebuleuse",
+            "Nébuleuse",
+            SynthPatch(
+                sawMix = 0.44F,
+                pulseMix = 0.18F,
+                triangleMix = 0.38F,
+                attackSeconds = 1.4F,
+                releaseSeconds = 3.2F,
+                cutoffHz = 1_650F,
+                chorusMix = 0.48F,
+                delayFeedback = 0.52F,
+                delayMix = 0.28F,
+                delaySyncBeats = 0.75F,
+                reverbMix = 0.46F,
+                lfoRateHz = 0.18F,
+                lfoDepth = 0.34F,
+                lfoDestination = SynthLfoDestination.FILTER,
+                lfoDelaySeconds = 0.8F,
+            ),
+        ),
+        SynthPreset(
+            "echo_dub",
+            "Écho dub",
+            SynthPatch(
+                sawMix = 0.54F,
+                pulseMix = 0.31F,
+                triangleMix = 0.15F,
+                cutoffHz = 1_900F,
+                resonance = 0.42F,
+                filterEnvelopeAmount = 1.2F,
+                delayFeedback = 0.72F,
+                delayMix = 0.46F,
+                delaySyncBeats = 0.75F,
+                drive = 0.18F,
+                reverbMix = 0.22F,
+            ),
+        ),
+    )
 }

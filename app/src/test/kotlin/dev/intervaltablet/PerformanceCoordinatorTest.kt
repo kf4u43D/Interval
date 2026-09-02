@@ -11,6 +11,7 @@ import dev.intervaltablet.domain.MidiMapping
 import dev.intervaltablet.domain.MidiMessage
 import dev.intervaltablet.domain.PassThroughMode
 import dev.intervaltablet.domain.PadArticulation
+import dev.intervaltablet.domain.ScaleLibrary
 import dev.intervaltablet.domain.ToneRowAction
 import dev.intervaltablet.domain.ToneRowEntry
 import dev.intervaltablet.domain.ToneRowMode
@@ -646,6 +647,38 @@ class PerformanceCoordinatorTest {
         assertEquals(1, moved.state.activeStepsBySource[TriggerSource.Touch(71)])
         assertEquals(0, moved.state.instrument.activeInstanceCount)
         assertTrue(moved.midiMessages().none { it is MidiMessage.NoteOn })
+    }
+
+    @Test
+    fun scaleChangeRevoicesHeldTouchWithoutClearingItsPressedProjection() {
+        val source = TriggerSource.Touch(72)
+        var state = PerformanceCoordinatorState.initial(
+            InstrumentConfig(chord = ChordLibrary.triad, padArticulation = PadArticulation.STACKED),
+        )
+        state = coordinator.reduce(
+            state,
+            PerformanceCommand.Instrument(
+                InstrumentAction.PressInterval(source, 2, 100, timestampNanos = 10L),
+            ),
+        ).state
+
+        val changed = coordinator.reduce(
+            state,
+            PerformanceCommand.Instrument(
+                InstrumentAction.SetScale(ScaleLibrary.harmonicMinor, timestampNanos = 20L),
+            ),
+        )
+
+        assertEquals(2, changed.state.activeStepsBySource[source])
+        assertTrue(source in changed.state.instrument.heldPadBySource)
+        assertEquals(
+            listOf(64, 60, 57),
+            changed.midiMessages().filterIsInstance<MidiMessage.NoteOff>().map { it.note },
+        )
+        assertEquals(
+            listOf(63, 60, 56),
+            changed.midiMessages().filterIsInstance<MidiMessage.NoteOn>().map { it.note },
+        )
     }
 
     @Test

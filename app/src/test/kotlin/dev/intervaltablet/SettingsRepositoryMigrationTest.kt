@@ -331,8 +331,8 @@ class SettingsRepositoryMigrationTest {
         val rewritten = mutablePreferencesOf()
         writeStoredSettings(rewritten, migrated)
         assertEquals(CURRENT_SETTINGS_SCHEMA, rewritten[intPreferencesKey("schema_version")])
-        assertTrue(requireNotNull(rewritten[stringPreferencesKey("working_preset_json")]).contains("\"schemaVersion\":4"))
-        assertTrue(requireNotNull(rewritten[stringPreferencesKey("preset_bank_json")]).contains("\"schemaVersion\":3"))
+        assertTrue(requireNotNull(rewritten[stringPreferencesKey("working_preset_json")]).contains("\"schemaVersion\":5"))
+        assertTrue(requireNotNull(rewritten[stringPreferencesKey("preset_bank_json")]).contains("\"schemaVersion\":4"))
         assertEquals(migrated, decodeStoredSettings(rewritten))
     }
 

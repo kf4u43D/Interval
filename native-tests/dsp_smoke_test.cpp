@@ -717,7 +717,7 @@ void testInvalidParametersCannotPoisonDsp() {
         "non-finite sample rate must use a safe default");
 
     for (int rawId = static_cast<int>(ParameterId::SawMix);
-         rawId <= static_cast<int>(ParameterId::Master);
+         rawId <= static_cast<int>(ParameterId::TempoBpm);
          ++rawId) {
         const auto id = static_cast<ParameterId>(rawId);
         synth.setParameter(id, nan);
