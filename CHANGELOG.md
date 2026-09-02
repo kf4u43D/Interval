@@ -4,6 +4,9 @@
 
 ### Added
 
+- Script PowerShell V2.4 prêt à l'emploi pour gate, vérifications Git anti-divergence,
+  push sans force et création/ouverture de Pull Request, avec dry-run local et auto-merge
+  strictement optionnel via GitHub CLI.
 - Étape 8/V2.4 : barre supérieure unifiée et pages Interval, MIDI, Synthé et
   Arpégiateur ; strummer vertical trois octaves et scène à deux mains en trois zones.
 - Changement de gamme atomique sur les pads maintenus, configuration d’arpège

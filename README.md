@@ -255,8 +255,8 @@ licence, identité commerciale, signature et publication sont hors de cette clô
 
 Le workspace est initialisé comme dépôt Git local sur la branche `main`, avec le Wrapper
 Gradle officiel 8.13 vérifié, et un remote `origin` est configuré. Le dépôt contient des
-commits locaux non poussés ; aucun push ni publication n'a été effectué et aucun état
-distant n'est déduit de la seule présence du remote. `docs/REPOSITORY_SETUP.md`
+commits locaux ; aucun push ni publication n'est effectué par les automatisations Codex
+et aucun état distant n'est déduit de la seule présence du remote. `docs/REPOSITORY_SETUP.md`
 décrit les protections de branche. Une CI GitHub Actions et une configuration Dependabot
 sont fournies sans secret ni action de publication.
 

@@ -431,6 +431,6 @@ soak restent des validations de certification distinctes.
 ## Dépôt
 
 Le workspace est un dépôt Git local sur `main` avec le Wrapper Gradle officiel 8.13 et son
-JAR vérifié. Un remote `origin` existe et le dépôt contient des commits locaux non
-poussés. Aucun push ni publication n'a été effectué, aucune URL n'est consignée ici et
-aucun état distant supplémentaire n'est revendiqué.
+JAR vérifié. Un remote `origin` existe et le dépôt contient des commits locaux.
+Aucun push ni publication n'est effectué par les automatisations Codex, aucune URL n'est
+consignée ici et aucun état distant supplémentaire n'est revendiqué.

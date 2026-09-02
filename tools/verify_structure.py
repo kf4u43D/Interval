@@ -52,6 +52,7 @@ REQUIRED_FILES = {
     "codex/prompts/06_v2_2_two_hand_low_latency.md",
     "codex/prompts/07_v2_3_direct_harmony_arpeggio.md",
     "codex/prompts/08_v2_4_workstation_surface.md",
+    "scripts/publish-v2-4.ps1",
     "gradle/libs.versions.toml",
     "gradle/wrapper/gradle-wrapper.properties",
     "app/src/main/AndroidManifest.xml",

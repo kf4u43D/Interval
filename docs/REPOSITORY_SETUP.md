@@ -37,6 +37,30 @@ Remplacer l’URL d’exemple au moment de l’exécution. Le script refuse d’
 - Dependabot activé pour Gradle et GitHub Actions ;
 - secrets de signature uniquement dans le coffre CI, jamais dans le dépôt.
 
+## Publication assistée de la V2.4
+
+Sous PowerShell, depuis la branche `v2.4` propre :
+
+```powershell
+.\scripts\publish-v2-4.ps1
+```
+
+Le script exécute le gate complet, actualise les références distantes, vérifie que
+`origin/main` est bien un ancêtre et effectue un push normal sans option de force. Si
+GitHub CLI est installé et authentifié, il crée ou retrouve la Pull Request. Sinon, il
+copie sa description et ouvre la page Compare. Il n'installe aucun outil et ne stocke
+aucun secret.
+
+Prévisualisation entièrement locale :
+
+```powershell
+.\scripts\publish-v2-4.ps1 -DryRun -SkipVerify
+```
+
+L'option `-EnableAutoMerge` exige `gh auth login` et doit être demandée explicitement ;
+elle conserve un merge commit et attend les protections de branche. Ne pas publier de
+Release tant que le suffixe `-dev`, la signature et la licence ne sont pas finalisés.
+
 ## Gradle Wrapper
 
 Le ZIP utilise d’abord un lanceur portable texte qui télécharge Gradle 8.13 et vérifie la

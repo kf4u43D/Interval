@@ -100,7 +100,7 @@ en temps-to-target, réverbération avec send/banque de combs normalisés et all
 canonique, puis limiteur identitaire sous son knee. Ces choix n'ajoutent aucune règle
 musicale au C++.
 
-La frontière JNI reçoit les paramètres compacts `0…15` et leurs valeurs déjà finies et
+La frontière JNI reçoit les paramètres compacts `0…27` et leurs valeurs déjà finies et
 bornées. Le cutoff canonique Kotlin reste dans `20 Hz…20 kHz`; le DSP le borne encore sous
 le Nyquist du sample rate négocié. Chaque démarrage accepté reçoit le patch complet. Après
 une reprise native, une transition de diagnostics vers un stream actif ou une hausse de

@@ -12,8 +12,11 @@
 - `benchmark-gfxinfo.ps1` : vérifie l'identité SHA-256 de l'APK installé, l'activité au
   premier plan et les 90 Hz, chauffe la scène, archive `gfxinfo` brut avec batterie et
   thermique, puis signale explicitement toute troncature du ring buffer.
-- `codex-stage` : lance l’un des sept prompts autonomes.
+- `codex-stage` : lance l’un des huit prompts autonomes.
 - `init-git` : initialise le dépôt et ajoute le remote lorsque son URL est connue.
+- `publish-v2-4.ps1` : valide la branche V2.4, refuse toute divergence/force-push,
+  publie la branche puis crée la Pull Request avec `gh` ou ouvre le navigateur avec sa
+  description copiée. `-DryRun -SkipVerify` teste le parcours sans réseau.
 - `install-standard-wrapper` : remplace le lanceur initial par le Wrapper Gradle officiel et vérifie son JAR.
 
 Les mesures physiques utilisent `assembleBenchmark` (`dev.intervaltablet.benchmark`, minifié
