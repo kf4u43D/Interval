@@ -85,6 +85,10 @@ pression normale. Une même graine et une même suite d'actions produisent les m
   quantificateur du flux brut et ne duplique aucune règle dans le routeur.
 - Basculer le réglage ne coupe pas les notes déjà tenues. Leur future Note Off conserve la
   hauteur exacte mémorisée par leur source.
+- Force to Scale reste utile comme quantification optionnelle des notes générées lorsque
+  la navigation devient chromatique. Le choix d'une nouvelle gamme est distinct : il
+  reprojette la hauteur courante et revoice atomiquement les pads maintenus, même lorsque
+  Force to Scale est désactivé.
 
 ### Undo
 
@@ -137,10 +141,16 @@ Changer de type d'accord revoicera immédiatement chaque pad maintenu : Note Off
 instances précédentes puis Note On du nouveau voicing au même timestamp. L'arpège repart
 de la première voix ; un accord déjà sélectionné est un no-op exact.
 
+Changer de gamme applique la même transaction atomique aux pads maintenus : toutes les
+anciennes instances sont libérées avant les nouvelles au même timestamp, sans perdre la
+source tactile/MIDI. La hauteur courante et l'historique sont reprojetés sur la grille ;
+une gamme déjà sélectionnée est un no-op exact.
+
 ### Strummer
 
-- Les cordes correspondent, dans l'ordre, aux notes du voicing courant après omission
-  des notes hors plage ; une doublure reste une corde distincte.
+- Les cordes correspondent au voicing courant répliqué à -12, 0 et +12 demi-tons, trié
+  dans l'ordre de hauteur après omission des notes hors plage. Le rail contient au plus
+  neuf cordes et une doublure reste une corde distincte.
 - Chaque corde déclenche une seule note à la vélocité demandée, sans atténuation des
   harmonies. Chaque hit possède une origine one-shot propre et une libération symétrique.
 - Un balayage peut traverser plusieurs cordes et s'inverser ; toutes les cordes
@@ -263,6 +273,8 @@ translation 0 et octave 0, sans effacer la série.
   pulses MIDI portent le même timestamp d'adaptateur.
 - Les changements de tempo ne réordonnent pas l'échéance déjà planifiée ; la nouvelle
   durée s'applique à la suivante.
+- La signature est une métadonnée persistée `1…12` sur `2/4/8/16`. Elle est affichée
+  avec le BPM mais ne modifie pas le comptage MIDI Clock ni la longueur de Tone Row.
 
 ## 8. Pass-through
 
@@ -290,14 +302,14 @@ Une transition de mode ne coupe pas arbitrairement les notes déjà tenues. Chaq
   restaurés, mais les notes actives, curseurs transitoires, compteurs, deadlines et état
   de lecture ne le sont pas : Tone Row revient à `Idle` et le transport à `Stopped`.
 - La session de travail, la banque et le slot sélectionné sont persistés dans DataStore,
-  articulation et Force to Scale compris. Les schémas courants sont Settings v5,
-  Preset v4 et banque v3.
+  articulation, Force to Scale, arpégiateur et signature compris. Les schémas courants
+  sont Settings v6, Preset v5 et banque v4.
   La migration d'un preset ancien infère `ARPEGGIATED` lorsque
   l'accord est Off et `STACKED` lorsqu'un accord est actif afin de préserver son rendu
   historique. Le schéma courant migre aussi le format plat de l'étape 1. Les imports/exports de fichiers
   restent hors périmètre.
-- Le patch du synthétiseur interne est un réglage global de Settings v5. Il n'entre pas
-  dans les snapshots Preset v4 ou la banque v3 ; sauvegarde, rappel UI, Program Change et
+- Le patch du synthétiseur interne est un réglage global de Settings v6. Il n'entre pas
+  dans les snapshots Preset v5 ou la banque v4 ; sauvegarde, rappel UI, Program Change et
   Song Select conservent donc le patch courant. Le Panic préalable au rappel éteint les
   voix et les effets sans réinitialiser ses paramètres.
 - L’autosauvegarde compare le snapshot durable après les commandes tactiles et MIDI :
@@ -333,21 +345,22 @@ sauvegarde pas de nouveau ce slot.
 
 ## 11. Moniteur audio et patch synthé
 
-- `SynthPatch` porte seize valeurs finies et bornées, associées à des identifiants filaires
-  stables `0…15` : mix saw, pulse et triangle, pulse width, ADSR, cutoff, résonance,
-  chorus mix, temps/feedback/mix du delay, reverb mix et master.
+- `SynthPatch` porte vingt-huit valeurs finies et bornées, associées à des identifiants
+  filaires stables `0…27`. Les identifiants historiques `0…15` sont inchangés ; `16…27`
+  ajoutent ADSR filtre, montant d'enveloppe, drive, vitesse/profondeur/destination/délai
+  du LFO, synchronisation rythmique du delay et tempo.
 - Le cutoff canonique de la session est borné à `20 Hz…20 kHz`. Le moteur natif applique
   en plus le plafond sûr du sample rate réellement négocié.
-- Les sessions Settings v0 à v3 migrent vers le patch par défaut exact. Settings v4/v5
-  persiste les seize champs globalement et borne chaque valeur lue avant la frontière JNI.
-- L'acteur rejoue les seize paramètres dans l'ordre après chaque démarrage audio accepté.
+- Les sessions Settings v0 à v5 migrent les paramètres absents vers leurs défauts exacts.
+  Settings v6 persiste les vingt-huit champs globalement et borne chaque valeur lue avant JNI.
+- L'acteur rejoue les vingt-huit paramètres dans l'ordre après chaque démarrage audio accepté.
   Il rejoue aussi le patch courant après toute récupération native, qu'elle soit observée
   par une transition d'arrêté à actif ou seulement par l'incrément du compteur de
   redémarrages, afin d'inclure les changements effectués pendant la reprise.
-- Le panneau Synthé est non modal. Il expose Timbre, cutoff/résonance, ADSR, chorus,
-  temps/feedback/mix du delay, reverb, master et une projection de diagnostics audio dédiée. Il est
-  désactivé tant que les réglages ne sont pas chargés, puis fermé et masqué sous
-  Performance Lock ; le toggle Audio Monitor reste disponible.
+- La page Synthé plein écran expose oscillateurs, filtre et son ADSR, ADSR ampli, drive,
+  LFO assignable à filtre/pulse width/delay, delay libre ou synchronisé, chorus, reverb,
+  master, six presets originaux et diagnostics. Elle est désactivée avant le chargement ;
+  sous Performance Lock, le Mute reste disponible.
 - Pendant un geste de slider, Compose conserve le brouillon local et publie au plus un
   aperçu par frame d'affichage. L'acteur n'envoie au moteur que les paramètres dont la
   valeur filaire a changé ; cet aperçu reste transitoire et ne déclenche ni publication
@@ -368,18 +381,18 @@ Aucune règle du domaine ne lit directement l’heure système, Android, un pér
 
 ## 13. Surface deux mains et chemin de jeu prioritaire
 
-- En portrait, la scène réserve environ 43 % de sa largeur à la main gauche
-  (treize gammes directes, Force to Scale, dix accords, articulation et strummer) et 57 % à la main droite
-  (Home/Undo/Panic et grille 3×3 des intervalles).
-- En paysage, l’harmonie reste également à gauche au lieu de consommer une bande au-dessus
-  de la scène. Les contrôles de routage, audio, synthé et console restent disponibles dans
-  le ruban système.
+- La page Interval réserve trois zones latérales : environ 37 % à l'harmonie (treize
+  gammes, Force to Scale et dix accords), 15 % au strummer vertical trois octaves et
+  48 % à la grille 3×3 des intervalles.
+- La barre supérieure unique regroupe note/contexte, BPM, signature, Mute, Home, Undo,
+  Panic et les onglets Interval, MIDI, Synthé et Arpégiateur. Il n'existe plus de barre
+  d'onglets inférieure ; MIDI In/Out et Learn sont réunis dans la page MIDI.
 - Gammes, accords, pads, articulations et cordes exposent des cibles tactiles d’au moins
   48 dp dans les fenêtres tablette couvertes. Gammes, accords et articulations appliquent
   leur sélection dès le front descendant tactile, tout en conservant une action sémantique
   pour clavier et accessibilité. L’articulation utilise une grille 2×2 afin de ne pas
   réduire la surface du strummer.
-- L’application de jeu V2.3 est une variante minifiée, compilée avec le moteur natif
+- L’application de jeu V2.4 est une variante minifiée, compilée avec le moteur natif
   Release et isolée du package V1. La variante instrumentée reste réservée aux tests.
 - Les actions tactiles rejoignent la mailbox FIFO d’un acteur mono-thread possédé par le
   ViewModel et exécuté à priorité Android audio. Leur traitement musical, MIDI et audio
@@ -388,10 +401,20 @@ Aucune règle du domaine ne lit directement l’heure système, Android, un pér
   frame ou `High input latency` n’est jamais présentée comme une latence acoustique ou
   MIDI absolue sans mesure loopback.
 
-## 14. Reports après la V2.3
+## 14. Arpégiateur configurable V2.4
+
+- L'ordre est `AS_PLAYED`, `UP`, `DOWN` ou `UP_DOWN`, avec une étendue d'une à
+  trois octaves. Le motif huit pas détermine note ou silence et conserve au moins un pas actif.
+- Le premier Note On reste immédiat au press. Chaque gate libère uniquement la voix
+  courante, sans terminer la session de pad ; l'étape suivante suit tempo et division,
+  même transport arrêté et Tone Row vide.
+- Modifier la configuration revoice uniquement les pads `ARPEGGIATED` maintenus. Un
+  accord `STACKED` en cours n'est ni coupé ni retriggeré.
+
+## 15. Reports après la V2.4
 
 - Les éléments de séquence typés Rest, Random Step et Ratchet ne sont pas assimilés à un
-  mouvement entier. L'ordonnanceur d'arpège V2.3 ne remplace pas leur modèle : Ratchet
+  mouvement entier. L'ordonnanceur d'arpège V2.4 ne remplace pas leur modèle : Ratchet
   attend encore ses propres actions et règles d'annulation liées au transport/destination.
 - L'émission MIDI Clock/Start/Stop/Continue et Song Position Pointer est différée ; cette
   spécification ne couvre que la réception du transport MIDI.

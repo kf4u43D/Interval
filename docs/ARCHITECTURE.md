@@ -22,14 +22,14 @@ Kotlin/JVM pur. Il contient :
 - gammes, grille de notes et note range ;
 - machine d’état d’instrument ;
 - accords et instances actives ;
-- articulation des pads, sessions maintenues par source, arpège déterministe et projection
-  du voicing pour le strummer ;
+- articulation des pads, sessions maintenues par source, arpège déterministe configurable
+  et projection trois octaves du voicing pour le strummer ;
 - mapping/routage MIDI ;
 - reducer transactionnel de l'éditeur MIDI Learn, avec baseline, brouillon, candidat,
   conflits et événement de commit ;
 - Tone Row et transport ;
-- contrat `SynthPatch` immutable et seize paramètres audio typés aux identifiants filaires
-  explicites `0…15` ;
+- contrat `SynthPatch` immutable et vingt-huit paramètres audio typés aux identifiants
+  filaires explicites `0…27`, avec stabilité de `0…15` ;
 - événements de sortie abstraits.
 
 Il ne dépend pas d’Android, de Compose, de JNI, de DataStore ou d’une horloge réelle.
@@ -62,6 +62,10 @@ récupération d'overflow ferment la transaction sans sérialiser son état tran
 Compose ne calcule aucune harmonie : la projection du strummer appelle `strumNotes()` du
 domaine. Les gestes ne déposent que des couples index/vélocité ; l'acteur les transforme
 en `StrumTone` one-shot avec une origine unique et une release planifiée après acceptation.
+
+Les jobs d'arpège sont indexés par source et génération. Le callback de gate dépose
+`ReleaseArpeggioVoice`, qui éteint la voix sans retirer le geste ; le callback de pas
+choisit ensuite ordre, octave et état du motif dans le reducer pur.
 
 Le panneau Synthé conserve un brouillon Compose pendant le déplacement d'un slider. Un
 ordonnanceur confluent limite ses aperçus à une position par frame d'affichage ; l'acteur
@@ -176,14 +180,16 @@ actif et une libération tardive d'une ancienne origine ne peut pas couper la vo
 - mapping MIDI ;
 - ports préférés par identité descriptive ;
 - activation du moniteur audio et Performance Lock ;
-- patch global du moniteur, seize floats bornés dont un cutoff canonique `20 Hz…20 kHz` ;
+- patch global du moniteur, vingt-huit floats bornés dont cutoff, deux enveloppes, drive,
+  LFO, delay synchronisé et tempo ;
 - Tone Row, séquence, mode, transformations et graine Random ;
-- tempo, durée de gate, division et source d'horloge ;
+- tempo, signature, durée de gate, division, source d'horloge et configuration d'arpège ;
 - banque de 128 presets et slot sélectionné.
 
 Une migration explicite accompagne tout changement de schéma. Le schéma Settings courant
-est en version 5 ; les presets sont en version 4 et la banque en version 3. Les lecteurs
-Settings v0 à v3 installent le patch synthé par défaut et Settings v0 à v4 désactive Force
+est en version 6 ; les presets sont en version 5 et la banque en version 4. Les lecteurs
+historiques installent les nouveaux champs et le patch synthé étendu à leurs défauts exacts ;
+Settings v0 à v4 désactive Force
 to Scale. Les lecteurs de presets v1/v2
 infèrent `ARPEGGIATED` pour l'accord Off et `STACKED` pour un accord actif, puis réécrivent
 le format courant. Le patch audio global est volontairement absent des presets : aucun
@@ -203,10 +209,10 @@ seuils actuels.
 
 ## Scène deux mains et chemin d’entrée faible latence
 
-`PerformanceScreen` adapte uniquement la composition visuelle. En portrait, un panneau
-gauche 43 % regroupe harmonie et strummer, tandis qu’un panneau droit 57 % regroupe les
-utilitaires et la grille d’intervalles. Le paysage conserve cette séparation latérale et
-utilise davantage de colonnes pour les gammes et les accords. Les treize gammes et dix
+`PerformanceScreen` adapte uniquement la composition visuelle. La page Interval emploie
+trois panneaux d'environ 37/15/48 % : harmonie, strummer vertical trois octaves et grille
+d’intervalles. La barre supérieure contient utilitaires et navigation ; les pages MIDI,
+Synthé et Arpégiateur remplacent les anciens panneaux superposés. Les treize gammes et dix
 accords sont des cibles directes ; un composant Compose distinct sépare le touch-down de
 l'action sémantique sans double déclenchement. Aucune règle musicale n’est dupliquée :
 les deux panneaux consomment les mêmes projections et callbacks du ViewModel.
@@ -220,12 +226,12 @@ les callbacks tactiles sans attendre l’état rendu suivant.
 
 La variante `performance` hérite de Release, active R8 et les bibliothèques natives
 optimisées, utilise une signature debug uniquement pour l’installation locale et ajoute
-le suffixe de package `.performance`. Elle est l’application de jeu V2.3 ; les variantes
+le suffixe de package `.performance`. Elle est l’application de jeu V2.4 ; les variantes
 Benchmark et Instrumented conservent leurs rôles de mesure et de test.
 
 ## Observabilité
 
-Le panneau Synthé non modal observe une projection audio dédiée et expose notamment :
+Les pages MIDI et Synthé observent des projections dédiées et exposent notamment :
 
 - périphériques/ports ouverts ;
 - compteur messages MIDI et pertes de file ;
@@ -258,5 +264,5 @@ attendent des actions typées ; Ratchet requiert plusieurs Note On futurs annula
 génération, ce que le job unique de release ne doit pas simuler. La génération MIDI
 Clock/transport et Song Position Pointer, le catalogue étendu d'actions mappables, les
 CC relatifs/continus, gammes personnalisées/scopes de presets et la certification soutenue à
-90 Hz restent hors de l'architecture V2.3. CV, réseau, Scala, microtonalité, MPE et MIDI 2.0 restent hors
+90 Hz restent hors de l'architecture V2.4. CV, réseau, Scala, microtonalité, MPE et MIDI 2.0 restent hors
 des étapes engagées.

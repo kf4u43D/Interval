@@ -396,6 +396,38 @@ L’écoute du cycle d’arpège et du revoicing est prête pour réception util
 réel, vrai multi-touch, TalkBack, loopback, rendu soutenu à 90 Hz, hotplug et soak restent
 ouverts sans bloquer cette livraison.
 
+## Étape 8 — V2.4 surface workstation
+
+**V2.4 logicielle terminée, installée et reçue sur SM-X620 le 2 septembre 2026.**
+
+- [x] Le changement de gamme partage la transaction de revoicing immédiat des accords :
+  Note Off avant Note On au même timestamp, ownership tactile/MIDI conservé.
+- [x] La barre supérieure donne accès aux quatre pages et regroupe Home, Undo, Panic,
+  Mute, BPM et signature.
+- [x] Interval est organisé en harmonie/strummer trois octaves/intervalles. La page MIDI
+  reprend ports In/Out, routage, console et Learn.
+- [x] L'arpégiateur autonome possède ordre, une à trois octaves, motif huit pas et gate ;
+  la release de gate n'annule jamais le pad et les accords plaqués ne sont pas retriggerés.
+- [x] Le synthé plein écran expose 28 paramètres réels, deux enveloppes, drive, LFO
+  assignable, delay synchronisé, effets/master et six presets originaux.
+- [x] Settings v6, presets v5 et banque v4 conservent des migrations explicites.
+- [x] Gate : 143/143 domaine sur 12 suites, 163/163 application sur 19 suites, soit
+  306/306 JVM, CTest 2/2 et 8/8 instrumentés en 28,734 s.
+- [x] La correction ergonomique issue de l'instrumentation porte les neuf cordes à au
+  moins 48 dp. Les quatre pages ont été inspectées sur SM-X620/API 36.
+- [x] `dev.intervaltablet.performance` version `0.2.4-dev-performance` est installée,
+  compilée ART `speed` et coinstallée uniquement avec `dev.intervaltablet.debug` V1.
+- [x] Après 108 frappes, `gfxinfo` donne p50 16 ms, p90/p95 20 ms et p99 21 ms ;
+  le moteur reste à 48 kHz, burst 96, buffer 192, queue 0/28 et zéro xrun/drop/reprise.
+
+Commit d’implémentation vérifié :
+`c762b9e632e2a141add757dced28a8995348db5d`.
+APK Performance final : 9 276 296 octets, SHA-256
+`ECDDE9FC6E4FBD0811EDA0C24CAB847281599C5A7C94EC785DCBB6D539FC2A82`.
+
+USB MIDI réel, vrai multi-touch, TalkBack, loopback, rendu soutenu à 90 Hz, hotplug et
+soak restent des validations de certification distinctes.
+
 ## Dépôt
 
 Le workspace est un dépôt Git local sur `main` avec le Wrapper Gradle officiel 8.13 et son

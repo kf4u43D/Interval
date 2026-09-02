@@ -15,9 +15,10 @@ Interval Tablet transforme une tablette Android en instrument de composition et 
 1. **Fiabilité MIDI** : routage prévisible, notes actives maîtrisées, hotplug et Panic.
 2. **Fidélité de jeu** : intervalles, Tone Row, transformations, accords et transport.
 3. **Contrôle assignable** : apprentissage MIDI transactionnel, prévisible et annulable.
-4. **Lisibilité scénique** : disposition deux mains portrait/paysage, contrôles tactiles
-   accessibles et peu de menus pendant le jeu.
-5. **Autonomie sonore** : synthèse soustractive efficace, sans devenir un workstation.
+4. **Lisibilité scénique** : disposition deux mains portrait/paysage, strummer central,
+   contrôles tactiles accessibles et navigation dans une barre supérieure unique.
+5. **Autonomie sonore** : synthèse soustractive expressive et presets embarqués, sans
+   détourner le produit de sa priorité MIDI.
 
 ## Principes produit
 
@@ -31,6 +32,22 @@ Interval Tablet transforme une tablette Android en instrument de composition et 
 - Toute sortie sonore/MIDI doit disposer d’un chemin explicite vers All Notes Off.
 - Une capture MIDI Learn ne devient autoritaire qu'après Save ; Cancel ne laisse aucune
   modification durable.
+- Une sélection de gamme ou d’accord revoice immédiatement les pads maintenus sans
+  perdre leur ownership ; Force to Scale reste un choix explicite pour les notes générées.
+- L’arpégiateur reste jouable transport arrêté et sépare ordre, octave, motif et gate de
+  la séquence Tone Row.
+
+## Portée de la V2.4
+
+- Page Interval à trois zones : harmonie, strummer vertical sur trois octaves et pads.
+- Barre supérieure commune avec navigation Interval/MIDI/Synthé/Arpégiateur, Home, Undo,
+  Panic, Mute, BPM et signature.
+- Changement de gamme et d’accord atomique sur les gestes maintenus.
+- Arpégiateur huit pas original, ordre et étendue réglables, inspiré seulement des
+  principes publics des arpégiateurs à motifs.
+- Synthé plein écran de 28 paramètres : deux enveloppes, drive, LFO assignable, delay
+  libre/synchronisé et six presets originaux.
+- Settings v6, presets musicaux v5 et banque v4, avec migrations déterministes.
 
 ## Portée de la V2
 

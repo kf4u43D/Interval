@@ -17,21 +17,21 @@ Le comportement cible est documenté à partir des fonctions observables décrit
   immédiat et Chromatic Shift momentané.
 - Éditeur MIDI Learn transactionnel pour Notes/CC, canal reçu ou Omni, seuil de CC,
   résolution explicite des conflits et validation/annulation atomique.
-- Accords jusqu’à trois notes, arpège autonome par pad, articulations `STACKED`/`MUTED`
-  et strummer tactile pour égrener le voicing courant.
+- Accords jusqu’à trois notes, arpège autonome configurable (ordre, motif, une à trois
+  octaves et gate), articulations `STACKED`/`MUTED` et strummer trois octaves.
 - Horloge MIDI **entrante**, Start, Stop et Continue.
-- Synthèse interne optionnelle : patch typé de 16 paramètres, oscillateurs soustractifs,
-  filtre, ADSR, chorus, temps/feedback/mix du delay, réverbération et panneau non modal.
+- Synthèse interne optionnelle : patch typé de 28 paramètres, deux ADSR, drive, LFO
+  assignable, delay libre/synchronisé et six presets originaux sur une page dédiée.
 - Interface deux mains adaptée à une tablette 10–11 pouces : harmonie/accords à gauche,
-  intervalles à droite en portrait comme en paysage, avec les dix variantes d’accords
-  accessibles sur la page principale.
-- Variante V2.3 Performance minifiée et coinstallable avec la V1, acteur musical dédié
+  strummer pleine hauteur au centre et intervalles à droite, avec navigation, utilitaires,
+  Mute, BPM et signature rythmique regroupés dans la barre supérieure.
+- Variante V2.4 Performance minifiée et coinstallable avec la V1, acteur musical dédié
   à priorité audio et moteur natif Release.
 
 Rest, Random Step et Ratchet dans la séquence, l'horloge/transport MIDI sortants, Song
 Position Pointer, le catalogue étendu d'actions mappables, les gammes personnalisées,
-les scopes de presets étendus et l'optimisation soutenue à 90 Hz restent différés après
-cette V2.3. CV, USB audio
+les scopes de presets musicaux étendus et l'optimisation soutenue à 90 Hz restent différés
+après cette V2.4. CV, USB audio
 multicanal, Wi‑Fi/RTP-MIDI, Ableton Link, Bluetooth MIDI, Scala/MPE/MIDI 2.0 et
 microtonalité restent hors périmètre.
 
@@ -78,6 +78,7 @@ Sous Windows PowerShell :
    - `codex/prompts/05_v2_1_performance_surface.md`
    - `codex/prompts/06_v2_2_two_hand_low_latency.md`
    - `codex/prompts/07_v2_3_direct_harmony_arpeggio.md`
+   - `codex/prompts/08_v2_4_workstation_surface.md`
 3. Utiliser le lanceur d'étape correspondant pour exécuter un seul lot en mode écriture
    contrôlé.
 
@@ -90,13 +91,13 @@ L’état du programme de développement est conservé dans `.codex/state.json` 
 - `app/src/main/cpp/` : moteur temps réel Oboe et DSP sans allocation dans le callback.
 - `native-tests/` : tests DSP compilables sur l’hôte sans SDK Android.
 - `docs/` : spécifications, traçabilité du guide, protocole matériel, architecture et validation.
-- `codex/prompts/` : sept lots autonomes et significatifs.
+- `codex/prompts/` : huit lots autonomes et significatifs.
 
 ## État d'implémentation
 
 Les trois étapes du **MVP logiciel**, l'étape 4 de la **V2**, l'étape 5 de la **V2.1**,
-l'étape 6 de la **V2.2** et l'étape 7 de la **V2.3**
-sont terminées depuis le 1er septembre 2026. La certification matérielle étendue reste
+l'étape 6 de la **V2.2**, l'étape 7 de la **V2.3** et l'étape 8 de la **V2.4**
+sont terminées au 2 septembre 2026. La certification matérielle étendue reste
 partielle et séparée de
 cette clôture. Les neuf actions tactiles
 et mappées, les accords, Tone Row et le
@@ -139,6 +140,13 @@ gammes, accords et articulations dès le contact tactile. Maintenir un pad en mo
 parcourt désormais le voicing au tempo/division configurés, même transport arrêté et
 sans Tone Row. Un changement d’accord revoicera immédiatement les pads maintenus.
 
+La V2.4 revoice aussi immédiatement les pads maintenus lors d’un changement de gamme,
+sans perdre leur session physique. Sa barre supérieure ouvre les pages Interval, MIDI,
+Synthé et Arpégiateur et rassemble Home, Undo, Panic, Mute, BPM et signature. Le strummer
+vertical couvre le voicing sur trois octaves. L’arpégiateur ajoute ordre, étendue,
+motif huit pas et gate ; le synthé plein écran ajoute enveloppe de filtre, drive, LFO
+assignable, delay synchronisable et six presets embarqués.
+
 La session de travail et une banque interne de 128 presets sont persistées avec migration
 de schéma. Program Change rappelle le slot zéro-based correspondant sur le canal d'entrée
 configuré ; Song Select effectue le même rappel global. Un slot absent n'est pas consommé
@@ -160,16 +168,16 @@ audio temps réel : huit voix, enveloppes, filtre, effets, limiteur, file SPSC, 
 et ownership RAII des callbacks. Les reducers et toutes les règles musicales restent en
 Kotlin pur ; le C++ ne les duplique pas.
 
-Le moniteur interne est piloté par un `SynthPatch` Kotlin immutable dont les seize
-paramètres possèdent des identifiants filaires explicites `0…15`. Le cutoff canonique est
+Le moniteur interne est piloté par un `SynthPatch` Kotlin immutable dont les vingt-huit
+paramètres possèdent des identifiants filaires explicites `0…27`. Le cutoff canonique est
 borné à `20 Hz…20 kHz`, puis le DSP respecte également le plafond sûr du sample rate
-négocié. Ce patch global relève de Settings v5 : il est distinct des presets musicaux v4
-et de leur banque v3, est rejoué après chaque démarrage audio accepté ainsi qu'après une
+négocié. Ce patch global relève de Settings v6 : il est distinct des presets musicaux v5
+et de leur banque v4, est rejoué après chaque démarrage audio accepté ainsi qu'après une
 récupération du stream — y compris détectée par le compteur de redémarrages sans état
 arrêté intermédiaire observé — et n'est pas modifié par Program Change ou Song Select.
 
-Le panneau Synthé non modal expose Timbre, filtre, ADSR, effets, master et diagnostics
-audio dédiés. Les sliders publient un aperçu audio confluent au plus une fois par frame,
+La page Synthé expose Timbre, ADSR filtre et ampli, drive, LFO, effets, master, presets
+et diagnostics audio dédiés. Les sliders publient un aperçu audio confluent au plus une fois par frame,
 limité aux paramètres modifiés, puis déposent le patch complet et persistant à la fin du
 geste. Le panneau reste désactivé avant le chargement de la session et disparaît sous
 Performance Lock, sans retirer le contrôle Audio Monitor.
@@ -189,6 +197,12 @@ module de référence. Les écarts et preuves sont suivis dans
 ## Vérification livrée
 
 Les validations reproductibles sont décrites dans `docs/VERIFICATION_REPORT.md`. Le gate
+V2.4 du 2 septembre 2026 réussit **143 tests domaine, 163 tests application et 8 tests
+instrumentés**, soit 306/306 tests JVM, CTest 2/2, les Lint applicables et tous les
+assemblages. La SM-X620 confirme les quatre pages, les cibles du strummer trois octaves,
+le moteur à 48 kHz sans xrun/drop et la V2.4 Performance coinstallée avec la dernière V1.
+
+Le gate historique
 V2.3 du 1er septembre 2026 réussit **138 tests domaine, 162 tests application et 8 tests
 instrumentés**, soit 300/300 tests JVM, CTest 2/2, cinq Lint sans issue et tous les
 assemblages. La SM-X620 confirme les treize gammes directes, les cibles à 48 dp et

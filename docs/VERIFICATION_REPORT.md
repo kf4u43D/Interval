@@ -6,16 +6,44 @@ Dates de référence : **20 août 2026** pour la clôture historique des portes 
 de paramètres/panneau Synthé avec validation du stream réel, **31 août 2026** pour la
 revalidation Wi-Fi et le correctif de packaging Oboe, puis **1er septembre 2026** pour le
 suivi continu des sliders Synthé, la clôture du MVP, le gate final Stage 4/V2 et la
-réception Stage 5/V2.1, Stage 6/V2.2 deux mains et Performance, puis Stage 7/V2.3 avec
-harmonie directe et arpège autonome.
+réception Stage 5/V2.1, Stage 6/V2.2 deux mains et Performance, Stage 7/V2.3 avec
+harmonie directe et arpège autonome, puis **2 septembre 2026** pour Stage 8/V2.4.
 
 Ce rapport sépare les preuves logicielles réellement exécutées de la réception partielle
 sur Samsung SM-X620 et des validations qui exigent encore un contrôleur MIDI USB, un vrai
 geste multi-touch, TalkBack ou un soak prolongé. Il clôt la tranche logicielle des portes
-1 à 7 et la V2.3 ; il ne constitue pas une preuve matérielle complète ni une preuve de
+1 à 8 et la V2.4 ; il ne constitue pas une preuve matérielle complète ni une preuve de
 parité avec le module de référence. Les chiffres des portes 1 à 4 restent ci-dessous des
-archives datées. L'état V2.3 logiciel est `complete` ; la certification matérielle reste
+archives datées. L'état V2.4 logiciel est `complete` ; la certification matérielle reste
 explicitement partielle.
+
+## Résultat synthétique du gate V2.4 final — 2 septembre 2026
+
+Commit d'implémentation vérifié : `c762b9e632e2a141add757dced28a8995348db5d`.
+
+| Domaine | Résultat | Preuve ou commande |
+|---|---|---|
+| Domaine Kotlin pur | Réussi | `:domain:test` : 143/143 tests, 12 suites |
+| Tests JVM application | Réussi | `:app:testDebugUnitTest` : 163/163 tests, 19 suites |
+| Total Kotlin/JVM | Réussi | 306/306, 0 échec/erreur/ignoré |
+| DSP et pont JNI/Oboe hôte | Réussi | CTest 2/2 |
+| Tests instrumentés | Réussi | SM-X620/API 36 : 8/8 en 28,734 s |
+| UI tablette | Réussi | quatre pages, barre supérieure et neuf cordes ≥48 dp |
+| Runtime audio après stress | Réussi | 48 kHz, burst 96, buffer 192, queue 0/28, zéro xrun/drop/reprise/erreur |
+| Installation | Réussi | V1 + V2.4 Performance uniquement ; ART `speed`, aucun crash/ANR natif |
+
+Le stress de 108 frappes donne p50 16 ms, p90/p95 20 ms et p99 21 ms. Il est
+comparable à la campagne V2.2 mais n'est ni une expérience A/B stricte ni une mesure
+tactile→audio/MIDI. USB MIDI, TalkBack, vrai multi-touch, loopback et soak restent ouverts.
+
+### Artefact V2.4 installé
+
+| Artefact | Taille | SHA-256 | Statut |
+|---|---:|---|---|
+| `app-performance.apk` | 9 276 296 octets | `ECDDE9FC6E4FBD0811EDA0C24CAB847281599C5A7C94EC785DCBB6D539FC2A82` | minifié, installé, ART `speed`, moteur natif Release |
+
+La synthèse de preuve est archivée sous
+[`implementation/evidence/2026-09-02-sm-x620/v2-4-stage8-summary.md`](implementation/evidence/2026-09-02-sm-x620/v2-4-stage8-summary.md).
 
 ## Résultat synthétique du gate V2.3 final — 1er septembre 2026
 

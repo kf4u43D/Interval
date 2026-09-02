@@ -4,6 +4,13 @@
 
 ### Added
 
+- Étape 8/V2.4 : barre supérieure unifiée et pages Interval, MIDI, Synthé et
+  Arpégiateur ; strummer vertical trois octaves et scène à deux mains en trois zones.
+- Changement de gamme atomique sur les pads maintenus, configuration d’arpège
+  ordre/octaves/motif huit pas/gate, BPM et signature rythmique persistés.
+- Synthé plein écran porté à 28 paramètres avec ADSR filtre, drive, LFO assignable,
+  delay synchronisable et six presets originaux embarqués.
+- Settings v6, preset musical v5 et banque v4 avec migrations historiques.
 - Étape 7/V2.3 : treize boutons de gammes permanents dans la zone main gauche, accords
   et articulations appliqués dès le touch-down avec sémantiques accessibles conservées.
 - Arpège autonome par pad maintenu, cadencé par le tempo/division sans transport ni
@@ -84,6 +91,11 @@
 
 ### Changed
 
+- `Audio-` devient un bouton Mute explicite ; MIDI In/Out et MIDI Learn sont réunis
+  dans la page MIDI. Force to Scale reste une quantification optionnelle des notes
+  générées et ne modifie toujours pas PassThru.
+- Le gate d’arpège libère uniquement la voix courante ; la session de pad demeure tenue
+  jusqu’au Release/Panic. Une reconfiguration d’arpège ne retrigger pas les accords plaqués.
 - Scène de jeu réorganisée à deux mains en portrait et en paysage : harmonie, Force to
   Scale, dix accords et strummer à gauche ; utilitaires et intervalles à droite.
 - Acteur musical placé sur un thread mono-thread possédé, nommé et prioritaire audio ;
@@ -250,6 +262,13 @@
 
 ### Verified
 
+- Gate Stage 8/V2.4 : 143/143 domaine, 163/163 application, 8/8 instrumentés sur
+  SM-X620/API 36 et CTest 2/2. L’APK Performance de 9 276 296 octets, SHA-256
+  `ECDDE9FC6E4FBD0811EDA0C24CAB847281599C5A7C94EC785DCBB6D539FC2A82`, est installée
+  avec la V1 et compilée ART `speed`. Diagnostic : 48 kHz, burst 96, buffer 192,
+  queue 0/28, zéro xrun/drop/reprise/erreur.
+- Stress 108 frappes V2.4 : p50 16 ms, p90/p95 20 ms et p99 21 ms ; cette mesure
+  `gfxinfo` n’est pas une mesure loopback tactile→audio/MIDI.
 - Gate Stage 6/V2.2 : 136/136 domaine, 161/161 application, 8/8 instrumentés sur
   SM-X620, CTest 2/2, cinq Lint sans issue, tous les assemblages et quatre ABI.
 - Stress V2.2 Performance de 108 frappes : p50 14 ms, p90 17 ms, p95 18 ms, p99 19 ms,

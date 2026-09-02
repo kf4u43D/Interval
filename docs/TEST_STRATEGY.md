@@ -35,7 +35,7 @@ Rapides, déterministes, sans Android :
 - absence de NaN/Inf ;
 - file SPSC ;
 - allocation de voix et Panic ;
-- contrat `ParameterId` des 16 paramètres et rejet des identifiants/valeurs invalides ;
+- contrat `ParameterId` des 28 paramètres et rejet des identifiants/valeurs invalides ;
 - lissage avec snap des mix d'oscillateurs, pulse width, sustain, coefficients du filtre,
   effets et master ;
 - cycle open/start/stop/reprise, fallback Exclusive→Shared et ownership des callbacks ;
@@ -63,7 +63,7 @@ Rapides, déterministes, sans Android :
   ciblée sans dette de release.
 - contrat Kotlin typé `SynthParameter`/`SynthPatch`, bornes `20…20 000 Hz` du cutoff,
   persistance du patch et ordre wire complet ;
-- rejeu des 16 paramètres lors du retour du stream ou de l'augmentation de `restartCount`
+- rejeu des 28 paramètres lors du retour du stream ou de l'augmentation de `restartCount`
   sans état arrêté observé, avec Panic/stop si le rejeu est refusé ;
 - projections et contrôles du panneau Synthé, brouillon local, aperçu audio confluent par
   frame, deltas filaires sans persistance et commit complet en fin de geste.
@@ -84,7 +84,7 @@ Rapides, déterministes, sans Android :
   distinctes d'au moins 48 dp.
 - panneau Synthé scrollable, sliders décrits, ordre aperçu puis commit et diagnostics
   libellé/valeur ;
-- AUDIO-01 : dix cycles start/stop, envoi des 16 paramètres et d'un Panic silencieux,
+- AUDIO-01 : dix cycles start/stop, envoi des 28 paramètres et d'un Panic silencieux,
   vidage borné de la file et collecte des diagnostics négociés.
 - panneau MIDI Learn adaptatif : cibles accessibles, capture depuis un port réel, aucune
   note/transmission/rappel du message appris et fermeture propre sous Performance Lock.
@@ -116,12 +116,28 @@ Ces tests instrumentés sont requis pour la réception matérielle. Ils ne sont 
   transport arrêté, le strummer one-shot à vélocité pleine et les releases ciblées.
 - `StrummerGestureTrackerTest` couvre les bandes sautées dans les deux sens, les sources
   indépendantes, la vélocité secondaire et l'hystérésis de frontière.
-- `AudioParametersTest` fixe les 16 identifiants wire, leurs bornes/défauts, l'ordre du
+- `AudioParametersTest` fixe les 28 identifiants wire, leurs bornes/défauts, l'ordre du
   patch et la sélection ordonnée des seuls paramètres modifiés ; les tests ViewModel
   couvrent les aperçus transitoires, le commit, la persistance et le rejeu après recovery.
 - Les tests DSP couvrent la convergence puis le snap exact des paramètres lissés ;
   `SynthPanelAccessibilityTest` couvre les contrôles, l'ordre aperçu/commit, le temps et
   le feedback du delay, ainsi que les diagnostics exposés par Compose.
+
+## État de preuve du lot V2.4
+
+- Les tests domaine couvrent le revoicing atomique lors d'un changement de gamme,
+  ownership/release multi-source, ordres et octaves d'arpège, pas silencieux, gate de
+  voix et absence de retrigger des accords plaqués.
+- Les tests de sérialisation couvrent Settings v6, Preset v5 et banque v4 ainsi que les
+  migrations historiques et leurs défauts exacts. Le contrat audio couvre 28 IDs.
+- Les tests ViewModel utilisent temps/dispatcher virtuels pour le gate d'arpège, le BPM,
+  la signature et la synchronisation du tempo du delay.
+- L'instrumentation 900 × 1 440 dp vérifie les quatre onglets, les contrôles synthé,
+  la page Arpégiateur et les neuf cordes à au moins 48 dp.
+- Gate : 143/143 tests domaine sur 12 suites, 163/163 application sur 19 suites,
+  306/306 JVM, CTest 2/2 et 8/8 instrumentés sur SM-X620/API 36 en 28,734 s.
+- Stress de 108 frappes : p50 16 ms, p90/p95 20 ms, p99 21 ms. Ces valeurs qualifient
+  le rendu `gfxinfo`, pas la latence tactile→MIDI/audio.
 
 ## État de preuve du lot V2.3
 

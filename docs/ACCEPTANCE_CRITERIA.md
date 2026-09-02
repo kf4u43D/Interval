@@ -293,3 +293,29 @@ TalkBack, vrai multi-touch, 90 Hz soutenu, hotplug et soak audio restent ouverts
 
 Le MIDI USB réel, le vrai multi-touch, TalkBack, le loopback tactile/MIDI→audio, le rendu
 soutenu à 90 Hz, le hotplug et le soak audio restent des validations matérielles ouvertes.
+
+## Porte 8 — V2.4 surface workstation
+
+### Critères logiciels et tablette
+
+- [x] Un changement de gamme ou d'accord revoice les pads maintenus au même timestamp,
+  sans perdre leurs sessions ni leurs futures releases.
+- [x] La barre supérieure regroupe Home, Undo, Panic, Mute, BPM, signature et les pages
+  Interval, MIDI, Synthé et Arpégiateur ; aucune barre d'onglets inférieure ne subsiste.
+- [x] La page Interval sépare harmonie, strummer vertical trois octaves et intervalles ;
+  les neuf cordes mesurent au moins 48 dp dans la fenêtre instrumentée.
+- [x] La page MIDI contient états In/Out, routage, canaux, console et MIDI Learn.
+- [x] L'arpégiateur fonctionne sans Tone Row ni transport, avec ordre, 1–3 octaves,
+  motif huit pas et gate qui ne termine pas le geste.
+- [x] La page Synthé expose 28 paramètres DSP fonctionnels, deux ADSR, drive, LFO,
+  delay libre/synchronisé et six presets originaux ; les sliders restent continus.
+- [x] Settings v6, Preset v5 et banque v4 migrent les formats historiques.
+- [x] Le gate réussit 143/143 domaine, 163/163 application, 306/306 JVM, CTest 2/2
+  et 8/8 instrumentés en 28,734 s sur SM-X620/API 36.
+- [x] `0.2.4-dev-performance` est minifiée, installée, compilée ART `speed` et
+  coinstallée avec la dernière V1 ; aucune variante de test ne reste installée.
+- [x] Après stress, le diagnostic audio indique 48 kHz, burst 96, buffer 192, queue
+  0/28 et zéro xrun, événement perdu, reprise ou erreur.
+
+Le stress `gfxinfo` n'est pas un loopback. USB MIDI réel, vrai multi-touch, TalkBack,
+latence tactile/MIDI→audio, 90 Hz soutenu, hotplug et soak 60 minutes restent ouverts.

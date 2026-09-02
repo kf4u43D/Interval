@@ -10,7 +10,8 @@ case "$STAGE" in
     5) PROMPT="$ROOT/codex/prompts/05_v2_1_performance_surface.md" ;;
     6) PROMPT="$ROOT/codex/prompts/06_v2_2_two_hand_low_latency.md" ;;
     7) PROMPT="$ROOT/codex/prompts/07_v2_3_direct_harmony_arpeggio.md" ;;
-    *) echo "Usage: $0 <1|2|3|4|5|6|7>" >&2; exit 2 ;;
+    8) PROMPT="$ROOT/codex/prompts/08_v2_4_workstation_surface.md" ;;
+    *) echo "Usage: $0 <1|2|3|4|5|6|7|8>" >&2; exit 2 ;;
 esac
 if ! command -v codex >/dev/null 2>&1; then
     echo "Codex CLI absent. Installer/authentifier Codex ou utiliser l’extension VS Code." >&2

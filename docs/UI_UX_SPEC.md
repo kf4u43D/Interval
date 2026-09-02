@@ -180,6 +180,25 @@ l'édition secondaire de l'arrangement sans retirer le transport ni les commande
 - `ARPÉGÉ` indique explicitement qu'un maintien parcourt les voix au tempo/division sans
   nécessiter de séquence. Le changement d'accord d'un pad maintenu est sonore immédiatement.
 
+## Extension porte 8 — surface workstation V2.4
+
+Cette extension remplace, pour la version courante, le rail d'utilitaires, le ruban
+inférieur et les panneaux superposés décrits historiquement plus haut.
+
+- Une barre supérieure unique contient le contexte musical, BPM, signature, Mute,
+  Home, Undo, Panic et quatre onglets : Interval, MIDI, Synthé et Arpégiateur.
+- Interval est une scène trois zones : harmonie à gauche, strummer vertical pleine
+  hauteur au centre et neuf pads à droite. Une bande compacte conserve Tone Row et
+  articulation sans réduire les neuf cordes trois octaves sous 48 dp.
+- MIDI réunit ports In/Out, canaux, routage, diagnostics et MIDI Learn.
+- Synthé est une page plein écran scrollable qui expose les 28 paramètres et six presets
+  originaux ; le suivi continu des sliders et la persistance au relâchement sont conservés.
+- Arpégiateur expose BPM, signature, division, gate, ordre, une à trois octaves et huit
+  pas. Les pas silencieux et actifs sont lisibles sans dépendre de la couleur.
+- Le bouton audio est un Mute explicite. Le mode muet n'affecte jamais MIDI.
+- Force to Scale reste dans la zone harmonie : c'est un quantificateur optionnel des
+  notes générées, pas une condition de changement de gamme ni un traitement PassThru.
+
 Rest, Random Step, Ratchet, Clock/transport MIDI sortants, Song Position Pointer, actions
 mappées étendues et catalogues de gammes/presets ne doivent pas apparaître comme contrôles
 inactifs ou factices en V2. L'optimisation soutenue à 90 Hz et la réception

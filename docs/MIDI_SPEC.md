@@ -144,6 +144,11 @@ Dans les modes qui transmettent, l'octet temps réel sortant précède donc les 
 - L'arpège de pad utilise la même durée de pas (tempo et division) mais pas l'état du
   transport : il fonctionne en `Stopped` et sans Tone Row. Chaque tick libère la Note On
   précédente de sa source avant la suivante ; Release/Panic annulent le propriétaire.
+- Son ordre (`AS_PLAYED`, montant, descendant ou aller-retour), son étendue d'une à
+  trois octaves et son motif de huit pas sont persistés. Un pas silencieux ne ferme pas
+  la session ; la durée de gate `1…100 %` libère uniquement la voix courante.
+- BPM et signature sont visibles sur la surface. La signature `1…12` sur
+  `2/4/8/16` reste une métadonnée locale et n'ajoute aucun message MIDI sortant.
 
 La sortie MIDI Clock/Start/Stop/Continue et Song Position Pointer n'est pas implémentée
 dans ce lot ; « Clock MIDI » désigne ici uniquement une source entrante.
@@ -163,8 +168,8 @@ dans ce lot ; « Clock MIDI » désigne ici uniquement une source entrante.
   les notes, les curseurs transitoires ni la lecture. La destination physique actuellement
   ouverte reste la destination active ; les identités de ports du preset deviennent des
   préférences de reconnexion, pas un hot-switch implicite.
-- Le patch du moniteur audio est global dans Settings v4 et absent des snapshots Preset v3
-  et de la banque v2. Program Change, Song Select et le Panic préalable au rappel ne le
+- Le patch du moniteur audio est global dans Settings v6 et absent des snapshots Preset v5
+  et de la banque v4. Program Change, Song Select et le Panic préalable au rappel ne le
   modifient donc jamais ; le chemin MIDI reste identique lorsque le moniteur est arrêté,
   indisponible ou en récupération.
 
@@ -182,6 +187,11 @@ contient le voicing complet. Un hit de strummer suit le même ciblage de destina
 même registre d'instances, mais ne contient qu'une corde à vélocité pleine et ne modifie
 pas la position musicale. Les doublures sont des instances distinctes et reçoivent leurs
 Note Off respectifs.
+
+Un changement de gamme ou d'accord sur une source tenue émet d'abord tous les Note Off
+de son ancien voicing puis les Note On du nouveau voicing au même timestamp. La source
+reste tenue et sa release physique conserve son autorité. Un changement de configuration
+d'arpège ne revoice que les sources `ARPEGGIATED`.
 
 Pour Panic et purge : Note Off explicites, puis CC 123 (All Notes Off) et CC 120 (All Sound Off). Un changement de destination purge l’ancienne route avant d’ouvrir/utiliser la nouvelle ; dès que la nouvelle session est réellement `OPEN`, ses 16 canaux reçoivent chacun CC 123 puis CC 120 avant le premier jeu, afin d’effacer d’éventuelles voix transmises sur un canal qui n’est plus connu après la déconnexion. Les timestamps sortants doivent être non décroissants.
 

@@ -66,10 +66,21 @@ relâcher le doigt. Les contrôles du synthé ont tous un effet DSP réel et con
 
 ## Critères de sortie
 
-- [ ] Gamme et accord revoicent les pads maintenus sans perte de session.
-- [ ] Quatre pages et contrôles système sont regroupés dans la barre supérieure.
-- [ ] Strummer vertical trois octaves et cibles accessibles.
-- [ ] Arpégiateur configurable audible sans Tone Row.
-- [ ] Tous les paramètres synthé et presets sont fonctionnels et persistants.
-- [ ] Gates domaine, natif, Android, Lint, assemblages et tablette exécutés.
-- [ ] Documentation, matrice, état Codex, changelog et commits locaux finalisés.
+- [x] Gamme et accord revoicent les pads maintenus sans perte de session.
+- [x] Quatre pages et contrôles système sont regroupés dans la barre supérieure.
+- [x] Strummer vertical trois octaves et cibles accessibles.
+- [x] Arpégiateur configurable audible sans Tone Row.
+- [x] Tous les paramètres synthé et presets sont fonctionnels et persistants.
+- [x] Gates domaine, natif, Android, Lint, assemblages et tablette exécutés.
+- [x] Documentation, matrice, état Codex, changelog et commits locaux finalisés.
+
+## Résultat de clôture
+
+- Commit d'implémentation : `c762b9e632e2a141add757dced28a8995348db5d`.
+- Tests : domaine 143/143, application 163/163, CTest 2/2, instrumentés 8/8.
+- Appareil : Samsung SM-X620/API 36, V1 et V2.4 Performance coinstallées.
+- APK : 9 276 296 octets, SHA-256
+  `ECDDE9FC6E4FBD0811EDA0C24CAB847281599C5A7C94EC785DCBB6D539FC2A82`.
+- Audio après stress : 48 kHz, burst 96, buffer 192, queue 0/28, zéro xrun/drop.
+- Limites : le stress `gfxinfo` n'est pas un loopback ; USB MIDI, TalkBack,
+  multi-touch réel et soak 60 minutes restent des réceptions distinctes.
