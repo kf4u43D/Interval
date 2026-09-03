@@ -124,17 +124,17 @@ ni calcul non borné dans le callback.
 - À chaque transition observée vers un stream de nouveau actif, l'adaptateur rejoue le
   `SynthPatch` complet dans l'ordre wire. Il le rejoue aussi si `restartCount` augmente entre
   deux diagnostics sans qu'un échantillon intermédiaire à l'arrêt ait été observé. Si un des
-  16 événements est refusé, il envoie Panic, arrête le moniteur et signale l'échec plutôt que
+  28 événements est refusé, il envoie Panic, arrête le moniteur et signale l'échec plutôt que
   de conserver silencieusement un patch partiel.
 - Le handle JNI possède un `shared_ptr<AudioEngine>` ; Oboe reçoit des callbacks possédés par
   `shared_ptr`. `shutdown()` est terminal et idempotent, joint le worker puis brise le cycle de
   possession seulement après le retour effectif des callbacks.
 
-## Paramètres MVP
+## Paramètres du patch courant
 
 `SynthParameter` constitue le contrat typé et stable entre domaine, persistance, UI, JNI
-et `ParameterId` natif. Chaque commande transporte un identifiant wire `0…15` et une valeur
-finie dans la borne canonique ci-dessous ; `SynthPatch` émet toujours les 16 commandes par
+et `ParameterId` natif. Chaque commande transporte un identifiant wire `0…27` et une valeur
+finie dans la borne canonique ci-dessous ; `SynthPatch` émet toujours les 28 commandes par
 identifiant croissant. Le cutoff durable/UI est borné à `20…20 000 Hz`, puis le rendu natif
 applique en plus le plafond sûr dépendant du stream, `0,45 × sampleRate`.
 
@@ -156,6 +156,22 @@ applique en plus le plafond sûr dépendant du stream, `0,45 × sampleRate`.
 | 13 | Delay mix | 0…1 | 0.16 |
 | 14 | Reverb mix | 0…1 | 0.20 |
 | 15 | Master, gain linéaire | 0…1.5 | 0.35, environ -9 dB |
+| 16 | Filter attack | 0.5 ms…10 s | 5 ms |
+| 17 | Filter decay | 1 ms…20 s | 180 ms |
+| 18 | Filter sustain | 0…1 | 0 |
+| 19 | Filter release | 1 ms…30 s | 350 ms |
+| 20 | Filter envelope amount | -4…4 octaves | 0 |
+| 21 | Output drive | 0…1 | 0 |
+| 22 | LFO rate | 0.05…20 Hz | 2 Hz |
+| 23 | LFO depth | 0…1 | 0 |
+| 24 | LFO destination | 0 Filter, 1 Pulse width, 2 Delay | 0 |
+| 25 | LFO delay | 0…10 s | 0 |
+| 26 | Delay sync beats | 0 libre, puis 0…4 noires | 0 |
+| 27 | Tempo | 20…300 BPM | 120 |
+
+Le drive est appliqué avant la limitation de sortie. Le LFO démarre avec un fondu
+d'entrée et module une seule destination. Lorsque Delay sync beats est nul, Delay time
+reste autoritaire ; sinon la durée provient du tempo et du nombre de noires.
 
 ## Tests
 
@@ -176,7 +192,7 @@ applique en plus le plafond sûr dépendant du stream, `0,45 × sampleRate`.
 - stop/restart sans événement résiduel, reprise après déconnexion et rejet d'ancienne génération ;
 - destruction concurrente avec callback d'erreur encore en vol ;
 - reset O(1), extinction exacte des tails et absence de résurgence après wrap ;
-- contrat wire des 16 paramètres, bornes, ordre, défauts et rejet des non-finis ;
+- contrat wire des 28 paramètres, bornes, ordre, défauts et rejet des non-finis ;
 - ciblage et convergence avec snap des mix, pulse width, sustain, coefficients de filtre,
   effets et master, ainsi que budget répété de Panic ;
 - rejeu du patch après reprise et arrêt sûr si le rejeu complet est refusé ;

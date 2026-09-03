@@ -52,8 +52,10 @@ routage MIDI. Il expose :
 
 Le patch persistant sous-jacent reste le contrat typé complet de 16 paramètres, même si
 le panneau regroupe les oscillateurs dans Timbre et n'expose pas tous les réglages avancés
-du delay. Pendant un glissement, le panneau garde un brouillon local ; il envoie un patch
-borné seulement à la fin du geste. Un redémarrage du stream rejoue ce patch complet, y
+du delay. Pendant un glissement, le panneau garde un brouillon local et publie un aperçu
+audio confluent au plus une fois par frame, limité aux paramètres réellement modifiés.
+La dernière position puis le patch complet sont validés/persistés à la fin du geste. Un
+redémarrage du stream rejoue ce patch complet, y
 compris lorsque seul le compteur de reprises révèle le redémarrage entre deux diagnostics,
 sans affecter MIDI.
 
@@ -70,10 +72,35 @@ La Console est un panneau superposé, défilable et refermable, pas un dialogue 
 - ports MIDI In/Out et leur phase de connexion ;
 - canal d’entrée Omni ou 1–16 et canal de sortie 1–16 ;
 - mode Off, Active, Active Last Note ou PassThru ;
-- état du mapping et Reset mapping ;
+- état du mapping, accès à MIDI Learn et Reset mapping ;
 - Performance Lock.
 
 L’absence ou l’erreur d’un port reste visible sans masquer la surface de jeu. Les messages d’état apparaissent dans un bandeau non modal, annoncé comme région accessible polie et explicitement refermable.
+
+### Panneau MIDI Learn V2
+
+MIDI Learn utilise une surface secondaire dédiée, adaptative et scrollable ; la logique
+de transaction n'est pas dupliquée dans l'écran Performance.
+
+- L'en-tête distingue mapping actif, brouillon inchangé/modifié et capture inactive,
+  armée ou candidate.
+- Le musicien choisit une action, arme Learn, puis voit le type Note/CC, le numéro et le
+  canal reçus. Une capture CC expose son seuil `1…127`, 64 par défaut.
+- Un choix explicite bascule entre canal reçu et Omni. Un recouvrement exact/Omni est
+  expliqué comme priorité, sans être présenté comme une erreur destructive.
+- Une collision sur la même clé affiche l'affectation existante et sépare clairement
+  `Ajouter` de `Remplacer`. L'éditeur expose aussi supprimer, annuler la capture et
+  restaurer le mapping par défaut.
+- Save est indisponible lorsqu'un candidat reste indécis et ne ferme qu'après commit
+  accepté. Cancel ferme sans modifier le mapping actif. Le panneau rappelle qu'un preset
+  existant ne reçoit le nouveau mapping qu'après resauvegarde de son slot.
+- Performance Lock ferme et masque l'éditeur. Une perte du port source, un arrêt d'hôte
+  ou une récupération d'overflow abandonne la capture et affiche ensuite un statut
+  non modal sûr.
+
+Chaque binding est présenté comme une cible focusable avec libellé complet type/numéro,
+canal, seuil éventuel et action. Attente, candidat, conflit et avertissement Omni sont
+annoncés en texte ; aucun état ne dépend de la couleur seule.
 
 ## Interaction
 
@@ -93,6 +120,9 @@ L’absence ou l’erreur d’un port reste visible sans masquer la surface de j
   du press par l'acteur, afin qu'une mailbox chargée ne puisse pas inverser leur ordre.
 - Le retour haptique est optionnel et n’est pas une exigence de la porte 1.
 - Aucun dialogue bloquant ne doit interrompre la performance.
+- Lorsqu'un Learn est armé, la première Note On ou le premier CC est consommé avant toute
+  action de performance, transmission ou rappel. Le feedback de candidat remplace donc le
+  feedback de jeu pour ce message.
 
 ## États visuels
 
@@ -106,6 +136,8 @@ L’absence ou l’erreur d’un port reste visible sans masquer la surface de j
   Home, Undo, Panic, accord, routage et Audio Monitor restent jouables.
 - Articulation et strummer : toujours visibles et jouables ; `MUTED` n'est pas présenté
   comme un audio globalement coupé, puisque le strummer et le moniteur peuvent rester sonores.
+- MIDI Learn : attente explicite, candidat reçu, collision à remplacer, recouvrement Omni,
+  brouillon modifié et rejet de Save possèdent chacun un libellé distinct.
 
 La porte 1 ne simulait aucun état d'enregistrement ou de transport. La porte 2 expose
 désormais les états `Idle`, `Recording`, `ManualPlayback`, `AutoPlaying` et `Paused`, le
@@ -128,6 +160,46 @@ Le deck Tone Row intégré affiche une timeline scrollable, les curseurs de rang
 séquence, Play/Pause, Play Once, Record, Stop et Restart. Il permet aussi de choisir le
 parcours, l'inversion, la transposition chromatique, la translation diatonique, l'octave,
 la séquence de mouvements, la source d'horloge, la division, le tempo, la durée de gate et
-les presets. Home et Panic restent accessibles ; Undo devient Restart uniquement dans le
-contexte de lecture défini par la spécification comportementale. Performance Lock masque
+les presets. Les huit parcours sont Prime, Retro, Random, Pendulum, Auto-Transpose
+haut/bas et Auto-Translate haut/bas. En Pause, les pads continuent de déplacer le curseur
+sans afficher le transport comme relancé ; une vélocité MIDI live n'est jamais présentée
+comme une modification de l'entrée enregistrée. Une seconde activation de Record indique
+clairement l'abandon de la prise. Home et Panic restent accessibles ; Undo devient
+Restart uniquement dans le contexte de lecture défini par la spécification
+comportementale. Performance Lock masque
 l'édition secondaire de l'arrangement sans retirer le transport ni les commandes de jeu.
+
+## Extension porte 7 — surface harmonique V2.3
+
+- Portrait et paysage conservent une séparation latérale à deux mains : harmonie à gauche,
+  intervalles à droite.
+- Les treize gammes standards et dix accords sont simultanément visibles en boutons
+  dédiés d'au moins 48 dp ; aucun menu n'est requis pendant le jeu.
+- Gamme, accord et articulation répondent au pointer-down. Clavier et services
+  d'accessibilité utilisent une action sémantique distincte, sans double callback au up.
+- `ARPÉGÉ` indique explicitement qu'un maintien parcourt les voix au tempo/division sans
+  nécessiter de séquence. Le changement d'accord d'un pad maintenu est sonore immédiatement.
+
+## Extension porte 8 — surface workstation V2.4
+
+Cette extension remplace, pour la version courante, le rail d'utilitaires, le ruban
+inférieur et les panneaux superposés décrits historiquement plus haut.
+
+- Une barre supérieure unique contient le contexte musical, BPM, signature, Mute,
+  Home, Undo, Panic et quatre onglets : Interval, MIDI, Synthé et Arpégiateur.
+- Interval est une scène trois zones : harmonie à gauche, strummer vertical pleine
+  hauteur au centre et neuf pads à droite. Une bande compacte conserve Tone Row et
+  articulation sans réduire les neuf cordes trois octaves sous 48 dp.
+- MIDI réunit ports In/Out, canaux, routage, diagnostics et MIDI Learn.
+- Synthé est une page plein écran scrollable qui expose les 28 paramètres et six presets
+  originaux ; le suivi continu des sliders et la persistance au relâchement sont conservés.
+- Arpégiateur expose BPM, signature, division, gate, ordre, une à trois octaves et huit
+  pas. Les pas silencieux et actifs sont lisibles sans dépendre de la couleur.
+- Le bouton audio est un Mute explicite. Le mode muet n'affecte jamais MIDI.
+- Force to Scale reste dans la zone harmonie : c'est un quantificateur optionnel des
+  notes générées, pas une condition de changement de gamme ni un traitement PassThru.
+
+Rest, Random Step, Ratchet, Clock/transport MIDI sortants, Song Position Pointer, actions
+mappées étendues et catalogues de gammes/presets ne doivent pas apparaître comme contrôles
+inactifs ou factices en V2. L'optimisation soutenue à 90 Hz et la réception
+USB/TalkBack/multi-touch restent des validations ouvertes.

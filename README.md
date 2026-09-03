@@ -4,21 +4,36 @@ Prototype d’instrument intervallique pour tablette Android, conçu d’abord c
 
 Le comportement cible est documenté à partir des fonctions observables décrites dans le guide utilisateur Misha d’Eventide. Le projet est une réimplémentation indépendante : il ne contient ni firmware, ni code, ni graphismes, ni ressources propriétaires d’Eventide.
 
-## Périmètre MVP
+## Périmètre actuel
 
 - Navigation par degrés de gamme avec les neuf actions `-4 … 0 … +4`.
-- Gammes 12-TET seulement ; aucune microtonalité dans ce cycle.
+- Treize gammes standards 12-TET et Force to Scale ; aucune microtonalité dans ce cycle.
 - MIDI USB entrant et sortant, sélection des ports, mapping notes/CC, panique MIDI.
 - Modes de routage `Off`, `Active`, `Active Last Note` et `PassThru`.
-- Tone Row : enregistrement, lecture manuelle, séquence automatique, transformations principales.
-- Accords jusqu’à trois notes, trois articulations de pads (`ARPEGGIATED`, `STACKED`,
-  `MUTED`) et strummer tactile pour égrener le voicing courant.
-- Horloge MIDI, Start, Stop et Continue.
-- Synthèse interne optionnelle : patch typé de 16 paramètres, oscillateurs soustractifs,
-  filtre, ADSR, chorus, delay, réverbération et panneau de contrôle non modal.
-- Interface paysage adaptée à une tablette 10–11 pouces.
+- Tone Row : enregistrement, lecture manuelle, séquence automatique, transformations principales
+  et huit parcours (`Prime`, `Retro`, `Random`, `Pendulum`, Auto-Transpose haut/bas et
+  Auto-Translate haut/bas).
+- Fonctions de jeu V2 : `Same Interval` et `Same Pitch` distincts, intervalle aléatoire
+  immédiat et Chromatic Shift momentané.
+- Éditeur MIDI Learn transactionnel pour Notes/CC, canal reçu ou Omni, seuil de CC,
+  résolution explicite des conflits et validation/annulation atomique.
+- Accords jusqu’à trois notes, arpège autonome configurable (ordre, motif, une à trois
+  octaves et gate), articulations `STACKED`/`MUTED` et strummer trois octaves.
+- Horloge MIDI **entrante**, Start, Stop et Continue.
+- Synthèse interne optionnelle : patch typé de 28 paramètres, deux ADSR, drive, LFO
+  assignable, delay libre/synchronisé et six presets originaux sur une page dédiée.
+- Interface deux mains adaptée à une tablette 10–11 pouces : harmonie/accords à gauche,
+  strummer pleine hauteur au centre et intervalles à droite, avec navigation, utilitaires,
+  Mute, BPM et signature rythmique regroupés dans la barre supérieure.
+- Variante V2.4 Performance minifiée et coinstallable avec la V1, acteur musical dédié
+  à priorité audio et moteur natif Release.
 
-Hors MVP : CV, USB audio multicanal, Wi‑Fi/RTP-MIDI, Ableton Link, Bluetooth MIDI, Scala/MPE/MIDI 2.0 et microtonalité.
+Rest, Random Step et Ratchet dans la séquence, l'horloge/transport MIDI sortants, Song
+Position Pointer, le catalogue étendu d'actions mappables, les gammes personnalisées,
+les scopes de presets musicaux étendus et l'optimisation soutenue à 90 Hz restent différés
+après cette V2.4. CV, USB audio
+multicanal, Wi‑Fi/RTP-MIDI, Ableton Link, Bluetooth MIDI, Scala/MPE/MIDI 2.0 et
+microtonalité restent hors périmètre.
 
 ## Démarrage
 
@@ -59,8 +74,13 @@ Sous Windows PowerShell :
    - `codex/prompts/01_midi_core.md`
    - `codex/prompts/02_tone_row_transport.md`
    - `codex/prompts/03_audio_ui_hardening.md`
-3. Utiliser `./scripts/codex-stage.sh 1`, `2` ou `3` pour lancer une étape en mode écriture contrôlé.
-4. Ne renseigner le remote Git que plus tard avec `./scripts/init-git.sh <url>`.
+   - `codex/prompts/04_v2_performance_midi_learn.md`
+   - `codex/prompts/05_v2_1_performance_surface.md`
+   - `codex/prompts/06_v2_2_two_hand_low_latency.md`
+   - `codex/prompts/07_v2_3_direct_harmony_arpeggio.md`
+   - `codex/prompts/08_v2_4_workstation_surface.md`
+3. Utiliser le lanceur d'étape correspondant pour exécuter un seul lot en mode écriture
+   contrôlé.
 
 L’état du programme de développement est conservé dans `.codex/state.json` et `docs/IMPLEMENTATION_STATUS.md`.
 
@@ -71,18 +91,61 @@ L’état du programme de développement est conservé dans `.codex/state.json` 
 - `app/src/main/cpp/` : moteur temps réel Oboe et DSP sans allocation dans le callback.
 - `native-tests/` : tests DSP compilables sur l’hôte sans SDK Android.
 - `docs/` : spécifications, traçabilité du guide, protocole matériel, architecture et validation.
-- `codex/prompts/` : trois lots autonomes et significatifs.
+- `codex/prompts/` : huit lots autonomes et significatifs.
 
 ## État d'implémentation
 
-Les trois étapes du **MVP logiciel sont terminées** depuis le 1er septembre 2026. La
-certification matérielle étendue reste partielle et séparée de cette clôture. Les neuf actions tactiles
+Les trois étapes du **MVP logiciel**, l'étape 4 de la **V2**, l'étape 5 de la **V2.1**,
+l'étape 6 de la **V2.2**, l'étape 7 de la **V2.3** et l'étape 8 de la **V2.4**
+sont terminées au 2 septembre 2026. La certification matérielle étendue reste
+partielle et séparée de
+cette clôture. Les neuf actions tactiles
 et mappées, les accords, Tone Row et le
 transport rejoignent des reducers déterministes. Tone Row couvre l'enregistrement de 5,
 7 ou 12 classes, la lecture manuelle et automatique, Prime/Retro/Random/Pendulum, les
 transformations, Play Once et une séquence de mouvements éditable. L'horloge interne et
 le MIDI Clock 24 PPQ sont exclusifs et les notes restent possédées par leur origine jusqu'à
 leur libération.
+
+La V2 ajoute une sémantique de performance plus fidèle. `Same Interval` répète le dernier
+déplacement diatonique, tandis que `Same Pitch` répète le dernier écart chromatique
+réellement entendu. `Random` joue immédiatement un déplacement pseudo-aléatoire
+déterministe et Chromatic Shift agit silencieusement tant que sa Note ou son CC reste
+tenu. Une seconde pression sur Record abandonne la prise en cours ; une rangée en pause
+reste navigable et une Note MIDI peut remplacer la vélocité enregistrée pour la seule
+émission courante.
+
+Tone Row expose huit parcours. Son Random démarre au premier élément puis conserve le
+signe de chaque pas demandé en faisant varier sa magnitude entre zéro et le double. Les
+quatre parcours Auto-Transpose/Auto-Translate accumulent leur transformation par cycle
+logique. L'éditeur MIDI Learn maintient une baseline et un brouillon : la première Note
+On ou le premier CC capturé est consommé avant rappel/routage, les conflits exacts exigent
+un remplacement explicite, et seul Save installe le mapping. Cancel ne modifie ni la
+session ni les presets existants.
+
+La V2.1 rend ses fonctions immédiatement visibles : l’application coinstallable porte le
+nom « Interval Tablet V2 », les pads portrait sont plus compacts, les dix accords restent
+affichés en deux rangées et les gammes standards se sélectionnent sur la scène. Force to
+Scale quantifie les notes générées vers la gamme active, sans altérer le MIDI PassThru.
+Le panneau Synthé expose séparément temps, feedback et mix du delay.
+
+La V2.2 organise le jeu à deux mains : harmonie, Force to Scale, accords et strummer à
+gauche ; utilitaires et neuf intervalles à droite. Le paysage reprend cette séparation
+latérale pour ne plus écraser le strummer. L’application de jeu est désormais la variante
+optimisée `dev.intervaltablet.performance`, tandis que l’acteur musical possède un thread
+mono-thread à priorité audio indépendant du rendu Compose.
+
+La V2.3 rétablit l’accès direct aux treize gammes dans le panneau main gauche et applique
+gammes, accords et articulations dès le contact tactile. Maintenir un pad en mode Arpégé
+parcourt désormais le voicing au tempo/division configurés, même transport arrêté et
+sans Tone Row. Un changement d’accord revoicera immédiatement les pads maintenus.
+
+La V2.4 revoice aussi immédiatement les pads maintenus lors d’un changement de gamme,
+sans perdre leur session physique. Sa barre supérieure ouvre les pages Interval, MIDI,
+Synthé et Arpégiateur et rassemble Home, Undo, Panic, Mute, BPM et signature. Le strummer
+vertical couvre le voicing sur trois octaves. L’arpégiateur ajoute ordre, étendue,
+motif huit pas et gate ; le synthé plein écran ajoute enveloppe de filtre, drive, LFO
+assignable, delay synchronisable et six presets embarqués.
 
 La session de travail et une banque interne de 128 presets sont persistées avec migration
 de schéma. Program Change rappelle le slot zéro-based correspondant sur le canal d'entrée
@@ -91,8 +154,8 @@ et aucun rappel n'est appliqué en PassThru. L'UI Compose originale ajoute timel
 curseurs, transport, transformations et gestion de presets tout en conservant la surface
 intervallique.
 
-Les pads proposent trois articulations persistées : la voix principale seule, le voicing
-plaqué, ou une navigation muette qui laisse le strummer égrener les notes du voicing. La
+Les pads proposent trois articulations persistées : un arpège autonome tant que le pad est
+maintenu, le voicing plaqué, ou une navigation muette qui laisse le strummer égrener les notes du voicing. La
 lecture automatique Tone Row conserve son rendu polyphonique historique. Le strummer
 accepte balayage dans les deux sens, sauts de plusieurs cordes, vélocité sur l'axe
 secondaire, clavier et services d'accessibilité sans déplacer la note courante.
@@ -105,16 +168,16 @@ audio temps réel : huit voix, enveloppes, filtre, effets, limiteur, file SPSC, 
 et ownership RAII des callbacks. Les reducers et toutes les règles musicales restent en
 Kotlin pur ; le C++ ne les duplique pas.
 
-Le moniteur interne est piloté par un `SynthPatch` Kotlin immutable dont les seize
-paramètres possèdent des identifiants filaires explicites `0…15`. Le cutoff canonique est
+Le moniteur interne est piloté par un `SynthPatch` Kotlin immutable dont les vingt-huit
+paramètres possèdent des identifiants filaires explicites `0…27`. Le cutoff canonique est
 borné à `20 Hz…20 kHz`, puis le DSP respecte également le plafond sûr du sample rate
-négocié. Ce patch global relève de Settings v4 : il est distinct des presets musicaux v3
-et de leur banque v2, est rejoué après chaque démarrage audio accepté ainsi qu'après une
+négocié. Ce patch global relève de Settings v6 : il est distinct des presets musicaux v5
+et de leur banque v4, est rejoué après chaque démarrage audio accepté ainsi qu'après une
 récupération du stream — y compris détectée par le compteur de redémarrages sans état
 arrêté intermédiaire observé — et n'est pas modifié par Program Change ou Song Select.
 
-Le panneau Synthé non modal expose Timbre, filtre, ADSR, effets, master et diagnostics
-audio dédiés. Les sliders publient un aperçu audio confluent au plus une fois par frame,
+La page Synthé expose Timbre, ADSR filtre et ampli, drive, LFO, effets, master, presets
+et diagnostics audio dédiés. Les sliders publient un aperçu audio confluent au plus une fois par frame,
 limité aux paramètres modifiés, puis déposent le patch complet et persistant à la fin du
 geste. Le panneau reste désactivé avant le chargement de la session et disparaît sous
 Performance Lock, sans retirer le contrôle Audio Monitor.
@@ -134,32 +197,68 @@ module de référence. Les écarts et preuves sont suivis dans
 ## Vérification livrée
 
 Les validations reproductibles sont décrites dans `docs/VERIFICATION_REPORT.md`. Le gate
-JVM final réussit **94 tests domaine et 140 tests application, soit 234/234**. Les suites
+V2.4 du 2 septembre 2026 réussit **143 tests domaine, 163 tests application et 8 tests
+instrumentés**, soit 306/306 tests JVM, CTest 2/2, les Lint applicables et tous les
+assemblages. La SM-X620 confirme les quatre pages, les cibles du strummer trois octaves,
+le moteur à 48 kHz sans xrun/drop et la V2.4 Performance coinstallée avec la dernière V1.
+
+Le gate historique
+V2.3 du 1er septembre 2026 réussit **138 tests domaine, 162 tests application et 8 tests
+instrumentés**, soit 300/300 tests JVM, CTest 2/2, cinq Lint sans issue et tous les
+assemblages. La SM-X620 confirme les treize gammes directes, les cibles à 48 dp et
+l’accord au touch-down ; `0.2.3-dev-performance` est installée et compilée ART `speed`.
+
+Le gate historique
+V2.2 du 1er septembre 2026 réussit **136 tests domaine, 161 tests application et 8 tests
+instrumentés**, CTest 2/2, cinq Lint sans issue et tous les assemblages. Sur SM-X620, un
+stress de 108 frappes donne p90 17 ms et 12 signaux de forte latence d’entrée sur 121
+frames, contre p90 24 ms et 901/1 777 dans la baseline V2.1 cumulative. Le moteur reste à
+48 kHz, burst 96, buffer 192, avec zéro xrun et zéro événement perdu. Cette campagne
+n’est pas une mesure loopback tactile→audio.
+
+Le gate
+V2.1 du 1er septembre 2026 réussit **136 tests domaine sur 12 suites et 161 tests
+application sur 19 suites, soit 297/297**, CTest 2/2, quatre Lint sans issue, tous les
+assemblages et le contrôle des runtimes natifs sur quatre ABI. La réception directe
+SM-X620/API 36 réussit 7/7 en 17,279 s et vérifie notamment les dix accords visibles,
+Force to Scale, les pads compacts et les gestes temps/feedback du delay. À l’issue de
+cette réception historique, seules V1 et V2.1 restaient installées ; la réception V2.2
+ci-dessus remplace cet état matériel.
+
+Le gate
+V2 final du 1er septembre 2026, associé au commit vérifié
+`13c2d7c4915e8da65c5e6898daf8ee9a5f253e75`, réussit **131 tests domaine sur 11 suites
+et 160 tests application sur 19 suites, soit 291/291**, sans échec, erreur ni test
+ignoré. Les suites
 déterministes couvrent Tone Row/transport, le coordinateur et son acteur hors Main, les
 articulations/strums, le byte stream MIDI, le contrat `SynthPatch`, la persistance et ses
 migrations, les projections UI et le moteur C++/JNI. Une
 variante minifiée `benchmark` et une variante non minifiée `instrumented`, toutes deux
-isolées du package utilisateur, séparent mesure de rendu et tests UI. Le gate complet,
-les 6/6 tests instrumentés courants et les huit passes A/B OFF/ON historiques sur SM-X620
-sont documentés. Le gate vérifie aussi que les runtimes Oboe et C++ accompagnent chaque
-ABI de la bibliothèque audio dans l'APK. Le rapport de vérification détaille les autres
-preuves et leurs limites.
+isolées du package utilisateur, séparent mesure de rendu et tests UI. Les quatre rapports
+Lint indiquent `No issues found.`, CTest réussit 2/2 et le gate principal comme les
+variantes Debug, Release non signée, Benchmark, Instrumented et AndroidTest sont verts.
+`scripts/verify.ps1` contrôle aussi les runtimes Oboe/C++ sur les quatre ABI. Les totaux
+94/140 du MVP et les campagnes antérieures restent archivés, clairement datés, dans le
+rapport de vérification.
 
-Une réception partielle a été effectuée sur Samsung SM-X620/API 36. Elle établit
-l'installation, plusieurs parcours UI, les trois articulations et un balayage du strummer,
-mais pas le MIDI USB/Clock réel, le hotplug, le vrai multi-touch, TalkBack, l'écoute
-comparative, la latence loopback ni le soak audio de 60 minutes ; ces
-validations restent régies par le protocole matériel et ne bloquent plus la clôture du
-MVP logiciel. Le package Release produit reste volontairement non signé ; choix de
+Une réception partielle a été effectuée sur Samsung SM-X620/API 36. La suite directe
+finale réussit 7/7 en 15,603 s : conflit MIDI Learn puis Replace, Save et Cancel, sliders
+Synthé continus, pads, Tone Row et dix cycles audio start/stop. Elle ne valide cependant
+pas le MIDI Learn avec un périphérique USB réel, le hotplug, le vrai multi-touch,
+TalkBack, un rendu soutenu à 90 Hz, l'écoute comparative, la latence loopback ni le soak
+audio de 60 minutes ; ces validations restent régies par le protocole matériel et ne
+bloquent pas la clôture de la V2 logicielle. Le package Release produit reste
+volontairement non signé ; choix de
 licence, identité commerciale, signature et publication sont hors de cette clôture.
 
 ## Dépôt et CI
 
 Le workspace est initialisé comme dépôt Git local sur la branche `main`, avec le Wrapper
-Gradle officiel 8.13 vérifié. Aucun remote ni publication n'a été configuré et aucun état
-distant n'est revendiqué. `docs/REPOSITORY_SETUP.md` décrit l'ajout ultérieur d'un remote
-et les protections de branche. Une CI GitHub Actions et une configuration Dependabot sont
-fournies sans secret ni action de publication.
+Gradle officiel 8.13 vérifié, et un remote `origin` est configuré. Le dépôt contient des
+commits locaux ; aucun push ni publication n'est effectué par les automatisations Codex
+et aucun état distant n'est déduit de la seule présence du remote. `docs/REPOSITORY_SETUP.md`
+décrit les protections de branche. Une CI GitHub Actions et une configuration Dependabot
+sont fournies sans secret ni action de publication.
 
 ## Nom, marques et publication
 

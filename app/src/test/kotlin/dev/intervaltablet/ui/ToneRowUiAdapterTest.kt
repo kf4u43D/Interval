@@ -77,4 +77,24 @@ class ToneRowUiAdapterTest {
         assertEquals("3/8", clockDivisionLabel(36))
         assertEquals("1/1", clockDivisionLabel(96))
     }
+
+    @Test
+    fun adapterMapsEveryAutomaticTransformationModeWithoutCollapsingDirection() {
+        val fixtures = mapOf(
+            ToneRowPlayMode.AUTO_TRANSPOSE_UP to ToneRowUiPlaybackMode.AUTO_TRANSPOSE_UP,
+            ToneRowPlayMode.AUTO_TRANSPOSE_DOWN to ToneRowUiPlaybackMode.AUTO_TRANSPOSE_DOWN,
+            ToneRowPlayMode.AUTO_TRANSLATE_UP to ToneRowUiPlaybackMode.AUTO_TRANSLATE_UP,
+            ToneRowPlayMode.AUTO_TRANSLATE_DOWN to ToneRowUiPlaybackMode.AUTO_TRANSLATE_DOWN,
+        )
+
+        fixtures.forEach { (domainMode, uiMode) ->
+            val inputs = AppUiState(
+                performance = PerformanceCoordinatorState.initial().copy(
+                    toneRow = ToneRowState(playMode = domainMode),
+                ),
+            ).toToneRowContentInputs()
+
+            assertEquals(domainMode.name, uiMode, inputs.toToneRowContentUiState().playbackMode)
+        }
+    }
 }

@@ -82,6 +82,10 @@ enum class ToneRowUiPlaybackMode {
     RETRO,
     RANDOM,
     PENDULUM,
+    AUTO_TRANSPOSE_UP,
+    AUTO_TRANSPOSE_DOWN,
+    AUTO_TRANSLATE_UP,
+    AUTO_TRANSLATE_DOWN,
 }
 
 enum class ToneRowUiClockSource {

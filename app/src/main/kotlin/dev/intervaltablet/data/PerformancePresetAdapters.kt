@@ -58,6 +58,7 @@ fun TransportState.toPersistenceSnapshot(): TransportOptionsSnapshot = Transport
         ClockSource.INTERNAL -> StoredClockSource.INTERNAL
         ClockSource.MIDI -> StoredClockSource.MIDI
     },
+    timeSignature = timeSignature,
 )
 
 /** Transport position and deadlines are intentionally not persisted or resumed. */
@@ -70,6 +71,7 @@ fun TransportOptionsSnapshot.toStoppedDomainState(): TransportState = TransportS
     clocksPerStep = clocksPerStep,
     tempoBpm = tempoBpm,
     noteDurationPercent = noteDurationPercent,
+    timeSignature = timeSignature,
 )
 
 private fun ToneRowPlayMode.toSnapshotMode(): ToneRowPlaybackSnapshotMode = when (this) {
@@ -77,6 +79,10 @@ private fun ToneRowPlayMode.toSnapshotMode(): ToneRowPlaybackSnapshotMode = when
     ToneRowPlayMode.RETRO -> ToneRowPlaybackSnapshotMode.RETRO
     ToneRowPlayMode.RANDOM -> ToneRowPlaybackSnapshotMode.RANDOM
     ToneRowPlayMode.PENDULUM -> ToneRowPlaybackSnapshotMode.PENDULUM
+    ToneRowPlayMode.AUTO_TRANSPOSE_UP -> ToneRowPlaybackSnapshotMode.AUTO_TRANSPOSE_UP
+    ToneRowPlayMode.AUTO_TRANSPOSE_DOWN -> ToneRowPlaybackSnapshotMode.AUTO_TRANSPOSE_DOWN
+    ToneRowPlayMode.AUTO_TRANSLATE_UP -> ToneRowPlaybackSnapshotMode.AUTO_TRANSLATE_UP
+    ToneRowPlayMode.AUTO_TRANSLATE_DOWN -> ToneRowPlaybackSnapshotMode.AUTO_TRANSLATE_DOWN
 }
 
 private fun ToneRowPlaybackSnapshotMode.toDomainMode(): ToneRowPlayMode = when (this) {
@@ -84,4 +90,8 @@ private fun ToneRowPlaybackSnapshotMode.toDomainMode(): ToneRowPlayMode = when (
     ToneRowPlaybackSnapshotMode.RETRO -> ToneRowPlayMode.RETRO
     ToneRowPlaybackSnapshotMode.RANDOM -> ToneRowPlayMode.RANDOM
     ToneRowPlaybackSnapshotMode.PENDULUM -> ToneRowPlayMode.PENDULUM
+    ToneRowPlaybackSnapshotMode.AUTO_TRANSPOSE_UP -> ToneRowPlayMode.AUTO_TRANSPOSE_UP
+    ToneRowPlaybackSnapshotMode.AUTO_TRANSPOSE_DOWN -> ToneRowPlayMode.AUTO_TRANSPOSE_DOWN
+    ToneRowPlaybackSnapshotMode.AUTO_TRANSLATE_UP -> ToneRowPlayMode.AUTO_TRANSLATE_UP
+    ToneRowPlaybackSnapshotMode.AUTO_TRANSLATE_DOWN -> ToneRowPlayMode.AUTO_TRANSLATE_DOWN
 }

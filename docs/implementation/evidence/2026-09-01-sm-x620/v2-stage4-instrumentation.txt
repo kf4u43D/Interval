@@ -1,0 +1,30 @@
+Interval Tablet - Stage 4 / V2 instrumentation summary
+Date: 2026-09-01
+Device: Samsung SM-X620, Android API 36
+Code commit: 13c2d7c4915e8da65c5e6898daf8ee9a5f253e75
+
+Command:
+adb -s <device> shell am instrument -w -r dev.intervaltablet.instrumented.test/androidx.test.runner.AndroidJUnitRunner
+
+Executed tests:
+- dev.intervaltablet.audio.NativeAudioEngineDeviceTest
+  - audio01StartsAndStopsTenTimesWithNegotiatedDiagnostics
+- dev.intervaltablet.ui.IntervalPadAccessibilityTest
+  - nineDrawnPadsRemainDistinctAccessibleSeventyTwoDpTargets
+  - articulationModesAndStrummerTonesRemainDistinctAccessibleTargets
+- dev.intervaltablet.ui.MidiMappingEditorAccessibilityTest
+  - editorHandlesConflictReplaceSaveAndCancelTransactionally
+- dev.intervaltablet.ui.SynthPanelAccessibilityTest
+  - synthPanelExposesControlsCommitsFinishedChangesAndClosesUnderLock
+  - synthPanelStaysDisabledUntilSettingsHaveLoaded
+- dev.intervaltablet.ui.ToneRowDeckLayoutTest
+  - aPopulatedTimelineKeepsTheWeightedPerformanceStageVisible
+
+Result:
+Time: 15,603
+OK (7 tests)
+
+Scope limit:
+The MIDI Learn scenario uses instrumented application/UI state. No physical USB MIDI
+device, USB hotplug, TalkBack, true multi-touch, 90 Hz performance campaign, audio
+loopback/hotplug, or 60-minute soak is validated by this run.

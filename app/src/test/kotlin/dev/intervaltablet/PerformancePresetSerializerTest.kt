@@ -13,8 +13,11 @@ import dev.intervaltablet.data.TransportOptionsSnapshot
 import dev.intervaltablet.domain.MidiAction
 import dev.intervaltablet.domain.MidiBindingKey
 import dev.intervaltablet.domain.MidiMapping
+import dev.intervaltablet.domain.ArpeggiatorConfig
+import dev.intervaltablet.domain.ArpeggioOrder
 import dev.intervaltablet.domain.PadArticulation
 import dev.intervaltablet.domain.PassThroughMode
+import dev.intervaltablet.domain.TimeSignature
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -33,6 +36,12 @@ class PerformancePresetSerializerTest {
                 scaleId = "minor_pentatonic",
                 chordId = "wide",
                 padArticulation = PadArticulation.MUTED,
+                arpeggiator = ArpeggiatorConfig(
+                    order = ArpeggioOrder.UP_DOWN,
+                    octaveSpan = 3,
+                    stepEnabled = listOf(true, false, true, false, true, true, false, true),
+                ),
+                forceToScale = true,
                 rangeMin = 12,
                 rangeMax = 120,
                 solfegeWrap = false,
@@ -65,6 +74,7 @@ class PerformancePresetSerializerTest {
                 noteDurationPercent = 41,
                 clocksPerStep = 8,
                 clockSource = StoredClockSource.MIDI,
+                timeSignature = TimeSignature(7, 8),
             ),
             midiMapping = MidiMapping(
                 bindings = mapOf(key to MidiAction.Record),
@@ -73,6 +83,25 @@ class PerformancePresetSerializerTest {
         )
 
         assertEquals(preset, PerformancePresetSerializer.decode(PerformancePresetSerializer.encode(preset)))
+    }
+
+    @Test
+    fun automaticTransformationModesPersistByNameWithoutChangingTheSchema() {
+        val modes = listOf(
+            ToneRowPlaybackSnapshotMode.AUTO_TRANSPOSE_UP,
+            ToneRowPlaybackSnapshotMode.AUTO_TRANSPOSE_DOWN,
+            ToneRowPlaybackSnapshotMode.AUTO_TRANSLATE_UP,
+            ToneRowPlaybackSnapshotMode.AUTO_TRANSLATE_DOWN,
+        )
+
+        modes.forEach { mode ->
+            val preset = PerformancePresetSnapshot(toneRow = ToneRowSnapshot(playMode = mode))
+            val encoded = PerformancePresetSerializer.encode(preset)
+
+            assertTrue("mode=$mode", encoded.contains("\"schemaVersion\":5"))
+            assertTrue("mode=$mode", encoded.contains("\"playMode\":\"${mode.name}\""))
+            assertEquals("mode=$mode", preset, PerformancePresetSerializer.decode(encoded))
+        }
     }
 
     @Test
@@ -128,6 +157,7 @@ class PerformancePresetSerializerTest {
         assertEquals(9, migrated.toneRow.referenceRootPitchClass)
         assertEquals("dorian", migrated.toneRow.referenceScaleId)
         assertEquals(PadArticulation.STACKED, migrated.musicalContext.padArticulation)
+        assertFalse(migrated.musicalContext.forceToScale)
         assertEquals(90, migrated.transport.tempoBpm)
         assertEquals(StoredClockSource.INTERNAL, migrated.transport.clockSource)
     }
@@ -148,7 +178,7 @@ class PerformancePresetSerializerTest {
     @Test
     fun corruptFutureDuplicateAndOversizedPayloadsAreRejected() {
         val valid = PerformancePresetSerializer.encode(PerformancePresetSnapshot())
-        val future = valid.replaceFirst("\"schemaVersion\":3", "\"schemaVersion\":4")
+        val future = valid.replaceFirst("\"schemaVersion\":5", "\"schemaVersion\":6")
         val duplicatePitchClass = """{
             "schemaVersion":1,
             "toneRow":[

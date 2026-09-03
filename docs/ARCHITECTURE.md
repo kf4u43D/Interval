@@ -3,10 +3,10 @@
 ## Vue d’ensemble
 
 ```text
-Compose UI ─┐
-Android MIDI ├─> actor ViewModel ─> app coordinator ─> reducers purs ─┬─> MIDI output
-Clock interne ─┘                                                    ├─> Native audio queue
-                                                                      └─> release planifiée
+Compose UI ─────┐
+Android MIDI ───┼─> actor ViewModel ─> capture Learn? ─> app coordinator ─> reducers purs ─┬─> MIDI output
+Clock/arpège ───┘                         │                                              ├─> Native audio queue
+                                          └─> brouillon/commit mapping                    └─> release planifiée
 
 DataStore <──── session/preset bank serialization ────> actor ViewModel
 
@@ -22,11 +22,14 @@ Kotlin/JVM pur. Il contient :
 - gammes, grille de notes et note range ;
 - machine d’état d’instrument ;
 - accords et instances actives ;
-- articulation des pads et projection déterministe du voicing pour le strummer ;
+- articulation des pads, sessions maintenues par source, arpège déterministe configurable
+  et projection trois octaves du voicing pour le strummer ;
 - mapping/routage MIDI ;
+- reducer transactionnel de l'éditeur MIDI Learn, avec baseline, brouillon, candidat,
+  conflits et événement de commit ;
 - Tone Row et transport ;
-- contrat `SynthPatch` immutable et seize paramètres audio typés aux identifiants filaires
-  explicites `0…15` ;
+- contrat `SynthPatch` immutable et vingt-huit paramètres audio typés aux identifiants
+  filaires explicites `0…27`, avec stabilité de `0…15` ;
 - événements de sortie abstraits.
 
 Il ne dépend pas d’Android, de Compose, de JNI, de DataStore ou d’une horloge réelle.
@@ -44,13 +47,25 @@ Application Android :
 
 Le `ViewModel` sérialise les actions musicales sur une mailbox bornée de 256 commandes,
 consommée hors du thread UI par un dispatcher mono-thread injectable. Les callbacks publics
-déposent des intentions brutes ; vélocité, reducers, horloge, gates et one-shots sont résolus
+déposent des intentions brutes ; vélocité, reducers, horloge, arpèges, gates et one-shots sont résolus
 dans cet acteur. Le coordinateur compose ensuite `IntervalReducer`, `ToneRowReducer`,
 `TransportReducer` et `MidiRouter` en préservant un ordre total des effets.
+
+Lorsqu'une capture MIDI Learn est armée, l'acteur présente chaque message parsé au
+`MidiMappingEditorReducer` avant `PresetMidiPolicy` et `MidiRouter`. Un message Note/CC
+consommé par l'éditeur ne peut donc ni rappeler, ni jouer, ni traverser. Armer demande
+Panic ; Add/Replace/Delete/Reset ne modifient qu'un brouillon. Le seul événement
+`CommitRequested` installe ensuite le mapping par la commande applicative normale et
+déclenche sa persistance. Cancel, arrêt d'hôte, Performance Lock, perte de source et
+récupération d'overflow ferment la transaction sans sérialiser son état transitoire.
 
 Compose ne calcule aucune harmonie : la projection du strummer appelle `strumNotes()` du
 domaine. Les gestes ne déposent que des couples index/vélocité ; l'acteur les transforme
 en `StrumTone` one-shot avec une origine unique et une release planifiée après acceptation.
+
+Les jobs d'arpège sont indexés par source et génération. Le callback de gate dépose
+`ReleaseArpeggioVoice`, qui éteint la voix sans retirer le geste ; le callback de pas
+choisit ensuite ordre, octave et état du motif dans le reducer pur.
 
 Le panneau Synthé conserve un brouillon Compose pendant le déplacement d'un slider. Un
 ordonnanceur confluent limite ses aperçus à une position par frame d'affichage ; l'acteur
@@ -85,7 +100,7 @@ en temps-to-target, réverbération avec send/banque de combs normalisés et all
 canonique, puis limiteur identitaire sous son knee. Ces choix n'ajoutent aucune règle
 musicale au C++.
 
-La frontière JNI reçoit les paramètres compacts `0…15` et leurs valeurs déjà finies et
+La frontière JNI reçoit les paramètres compacts `0…27` et leurs valeurs déjà finies et
 bornées. Le cutoff canonique Kotlin reste dans `20 Hz…20 kHz`; le DSP le borne encore sous
 le Nyquist du sample rate négocié. Chaque démarrage accepté reçoit le patch complet. Après
 une reprise native, une transition de diagnostics vers un stream actif ou une hausse de
@@ -101,15 +116,18 @@ Exécutable CMake hôte qui compile les primitives DSP sans Android ni Oboe. Il 
 
 1. Un bouton Compose, une intention Tone Row, une échéance interne ou un message MIDI
    dépose une commande horodatée dans la mailbox bornée.
-2. Le coordinateur appelle le reducer concerné. Une action Tone Row automatique devient
+2. Un message MIDI passe d'abord par une éventuelle capture Learn, puis par la politique
+   de preset et le routeur seulement s'il n'a pas été consommé.
+3. Le coordinateur appelle le reducer concerné. Une action Tone Row automatique devient
    `InstrumentAction.PressAbsolute` et conserve le voicing historique ; un geste de pad
    en Record/Manual devient `PressPadAbsolute` et respecte l'articulation. Le strummer
-   utilise `StrumTone`. Voicing et ownership restent ainsi uniques dans le domaine.
-3. Les reducers retournent de nouveaux états et des listes ordonnées d'événements.
-4. Les événements sont dispatchés immédiatement vers MIDI Out et/ou audio interne selon la
+   utilise `StrumTone`. Un tick autonome devient `AdvanceArpeggio`. Voicing et ownership
+   restent ainsi uniques dans le domaine.
+4. Les reducers retournent de nouveaux états et des listes ordonnées d'événements.
+5. Les événements sont dispatchés immédiatement vers MIDI Out et/ou audio interne selon la
    configuration ; la persistance et la présentation ne précèdent jamais ce dispatch.
-5. L’état devient la source unique de l’UI, via des projections structurelles étroites.
-6. Toute erreur d’adaptateur remonte comme état de capacité, jamais comme mutation implicite du domaine.
+6. L’état devient la source unique de l’UI, via des projections structurelles étroites.
+7. Toute erreur d’adaptateur remonte comme état de capacité, jamais comme mutation implicite du domaine.
 
 Une voix automatique Tone Row reçoit une origine système unique et mémorise aussi la
 destination qui a accepté son Note On. Avant la note suivante, Pause, Stop, Panic ou
@@ -125,6 +143,10 @@ actif et une libération tardive d'une ancienne origine ne peut pas couper la vo
 - Horloge interne : un seul job attend la prochaine deadline injectée par le domaine ;
   il renvoie une commande horodatée dans la même mailbox et n'exécute aucune règle musicale.
   Un callback tardif produit un seul tick puis le reducer rebase l'échéance suivante.
+- Arpège autonome : un job borné par source attend la durée de pas du transport et remet
+  uniquement `AdvanceArpeggio` dans la mailbox. Le domaine décide si la source et le
+  voicing existent encore ; Release/Panic/reconfiguration annulent les jobs et rendent
+  tout callback tardif idempotent.
 - MIDI Clock : le reducer compte les pulses à 24 PPQ et mémorise la dernière période
   positive observée pour calculer le gate ; des timestamps identiques restent comptés
   mais ne remplacent pas cette estimation.
@@ -154,31 +176,62 @@ actif et une libération tardive d'une ancienne origine ne peut pas couper la vo
 ## Données persistées
 
 - version de schéma ;
-- clé, gamme, plage, accord et articulation des pads ;
+- clé, gamme, plage, accord, articulation des pads et Force to Scale ;
 - mapping MIDI ;
 - ports préférés par identité descriptive ;
 - activation du moniteur audio et Performance Lock ;
-- patch global du moniteur, seize floats bornés dont un cutoff canonique `20 Hz…20 kHz` ;
+- patch global du moniteur, vingt-huit floats bornés dont cutoff, deux enveloppes, drive,
+  LFO, delay synchronisé et tempo ;
 - Tone Row, séquence, mode, transformations et graine Random ;
-- tempo, durée de gate, division et source d'horloge ;
+- tempo, signature, durée de gate, division, source d'horloge et configuration d'arpège ;
 - banque de 128 presets et slot sélectionné.
 
 Une migration explicite accompagne tout changement de schéma. Le schéma Settings courant
-est en version 4 ; les presets restent en version 3 et la banque en version 2. Les lecteurs
-Settings v0 à v3 installent le patch synthé par défaut. Les lecteurs de presets v1/v2
+est en version 6 ; les presets sont en version 5 et la banque en version 4. Les lecteurs
+historiques installent les nouveaux champs et le patch synthé étendu à leurs défauts exacts ;
+Settings v0 à v4 désactive Force
+to Scale. Les lecteurs de presets v1/v2
 infèrent `ARPEGGIATED` pour l'accord Off et `STACKED` pour un accord actif, puis réécrivent
 le format courant. Le patch audio global est volontairement absent des presets : aucun
 rappel UI, Program Change ou Song Select ne change le son du moniteur. Les identifiants
 Android de session ne sont pas persistés seuls.
 
 Les snapshots excluent intentionnellement les notes actives, les curseurs temporaires,
-les compteurs de transport et les deadlines. Une restauration conserve la destination
-physique actuellement ouverte, remet Tone Row à `Idle` et le transport à `Stopped`; les
+les compteurs de transport, les deadlines et toute transaction/capture MIDI Learn. Une
+restauration conserve la destination physique actuellement ouverte, remet Tone Row à
+`Idle` et le transport à `Stopped`; les
 identités de ports restaurées servent de préférences de reconnexion.
+
+Le mapping validé reste dans Settings et dans les snapshots musicaux. Modifier le mapping
+de la session ne réécrit pas les 128 presets : un slot existant ne change qu'après sa
+propre sauvegarde. Le format Mapping v1 reste suffisant pour les clés Note/CC, actions et
+seuils actuels.
+
+## Scène deux mains et chemin d’entrée faible latence
+
+`PerformanceScreen` adapte uniquement la composition visuelle. La page Interval emploie
+trois panneaux d'environ 37/15/48 % : harmonie, strummer vertical trois octaves et grille
+d’intervalles. La barre supérieure contient utilitaires et navigation ; les pages MIDI,
+Synthé et Arpégiateur remplacent les anciens panneaux superposés. Les treize gammes et dix
+accords sont des cibles directes ; un composant Compose distinct sépare le touch-down de
+l'action sémantique sans double déclenchement. Aucune règle musicale n’est dupliquée :
+les deux panneaux consomment les mêmes projections et callbacks du ViewModel.
+
+Le ViewModel possède par défaut un `ExecutorCoroutineDispatcher` mono-thread nommé
+`IntervalMusicalActor`, fermé dans `onCleared()` et configuré avec
+`THREAD_PRIORITY_AUDIO`. Les tests peuvent toujours injecter leur dispatcher. La mailbox
+FIFO, les reducers, l’émission MIDI et la mise en file native restent sérialisés sur cet
+acteur ; la persistance et les diagnostics gardent leurs workers séparés. Compose publie
+les callbacks tactiles sans attendre l’état rendu suivant.
+
+La variante `performance` hérite de Release, active R8 et les bibliothèques natives
+optimisées, utilise une signature debug uniquement pour l’installation locale et ajoute
+le suffixe de package `.performance`. Elle est l’application de jeu V2.4 ; les variantes
+Benchmark et Instrumented conservent leurs rôles de mesure et de test.
 
 ## Observabilité
 
-Le panneau Synthé non modal observe une projection audio dédiée et expose notamment :
+Les pages MIDI et Synthé observent des projections dédiées et exposent notamment :
 
 - périphériques/ports ouverts ;
 - compteur messages MIDI et pertes de file ;
@@ -189,12 +242,27 @@ Le panneau Synthé non modal observe une projection audio dédiée et expose not
 - dernière erreur non sensible.
 
 Compose n'observe jamais l'état monolithique depuis la coque de scène. Des projections
-immuables séparent header, contenu/cursor Tone Row, grille, chacun des neuf pads, ruban,
+immuables séparent header, contenu/cursor Tone Row, grille, chacun des neuf pads, surface
+harmonique, ruban,
 articulation/strummer, console, statut et synthé/diagnostics. Les pads conservent neuf nœuds tactiles/focus/sémantiques
 distincts mais dessinent leur contenu via cache afin qu'un tick n'impose pas neuf sous-arbres
 Material complets.
 
-Le gate JVM final couvre ce découpage, le contrat audio, ses migrations et les aperçus
-transitoires avec 94 tests domaine et 140 tests application, soit 234/234.
+Le gate V2 couvre ce découpage, le contrat audio, ses migrations, les aperçus transitoires,
+le reducer d'éditeur MIDI Learn et son interception avec 131 tests domaine et 160 tests
+application, soit 291/291. Les 2/2 suites natives, les Lint Debug, Release, Benchmark et
+Instrumented sans issue, les quatre variantes assemblées et les 7/7 tests directs sur
+Samsung SM-X620 complètent la preuve. Cette réception Android ne remplace pas les
+protocoles avec périphériques USB MIDI réels, qui restent ouverts.
 
 Aucune télémétrie réseau dans le MVP.
+
+## Extensions différées
+
+Le modèle de séquence reste une liste de mouvements entiers. Rest, Random Step et Ratchet
+attendent des actions typées ; Ratchet requiert plusieurs Note On futurs annulables par
+génération, ce que le job unique de release ne doit pas simuler. La génération MIDI
+Clock/transport et Song Position Pointer, le catalogue étendu d'actions mappables, les
+CC relatifs/continus, gammes personnalisées/scopes de presets et la certification soutenue à
+90 Hz restent hors de l'architecture V2.4. CV, réseau, Scala, microtonalité, MPE et MIDI 2.0 restent hors
+des étapes engagées.

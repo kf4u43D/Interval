@@ -108,7 +108,7 @@ Java_dev_intervaltablet_audio_NativeAudioEngine_nativeSetParameter(
     const auto* ownedHandle = fromHandle(handle);
     if (ownedHandle == nullptr || !*ownedHandle) return JNI_FALSE;
     if (parameterId < static_cast<jint>(intervaltablet::dsp::ParameterId::SawMix) ||
-        parameterId > static_cast<jint>(intervaltablet::dsp::ParameterId::Master) ||
+        parameterId > static_cast<jint>(intervaltablet::dsp::ParameterId::TempoBpm) ||
         !std::isfinite(static_cast<float>(value))) {
         return JNI_FALSE;
     }

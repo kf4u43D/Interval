@@ -82,4 +82,21 @@ class ToneRowUiModelTest {
         assertEquals("0", signedUiValue(0))
         assertEquals("-4", signedUiValue(-4))
     }
+
+    @Test
+    fun playbackModesExposeManualThenAutomaticTransformChoicesInDeckOrder() {
+        assertEquals(
+            listOf(
+                ToneRowUiPlaybackMode.PRIME,
+                ToneRowUiPlaybackMode.RETRO,
+                ToneRowUiPlaybackMode.RANDOM,
+                ToneRowUiPlaybackMode.PENDULUM,
+                ToneRowUiPlaybackMode.AUTO_TRANSPOSE_UP,
+                ToneRowUiPlaybackMode.AUTO_TRANSPOSE_DOWN,
+                ToneRowUiPlaybackMode.AUTO_TRANSLATE_UP,
+                ToneRowUiPlaybackMode.AUTO_TRANSLATE_DOWN,
+            ),
+            ToneRowUiPlaybackMode.entries,
+        )
+    }
 }

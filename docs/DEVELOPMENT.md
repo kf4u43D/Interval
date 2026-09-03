@@ -79,15 +79,22 @@ Le protocole complet est dans `docs/HARDWARE_TEST_PROTOCOL.md`.
 - Activer le débogage USB.
 - Vérifier `adb devices`.
 - Installer avec `./gradlew :app:installDebug`.
-- Lancer les tests instrumentés avec `./gradlew connectedAndroidTest`.
+- Lancer la variante de test isolée avec
+  `./gradlew :app:connectedInstrumentedAndroidTest` lorsque le transport ADB piloté par
+  Gradle est disponible.
+- Après installation des APK `instrumented` et `instrumented-androidTest`, la commande
+  directe utilisée pour la réception finale est :
+
+  ```bash
+  adb -s <device> shell am instrument -w -r dev.intervaltablet.instrumented.test/androidx.test.runner.AndroidJUnitRunner
+  ```
+
 - Pour MIDI USB, utiliser un hub USB-C alimenté si la tablette doit être chargée simultanément.
 
 ## Git
 
-Le workspace n’a pas de remote. Lorsque l’adresse existe :
-
-```bash
-./scripts/init-git.sh git@github.com:owner/repository.git
-```
-
-Le script initialise si nécessaire, ajoute `origin` et n’effectue ni commit ni push. Voir `docs/REPOSITORY_SETUP.md` pour les protections et contrôles préalables.
+Le workspace possède un remote `origin` configuré. Cette configuration ne prouve aucun
+état distant : aucun push ni publication n’est effectué ou autorisé par les procédures
+Codex du projet. Les scripts d’initialisation ne doivent pas être relancés sur ce dépôt,
+car ils refusent d’écraser un `origin` existant. Voir `docs/REPOSITORY_SETUP.md` pour les
+protections et contrôles préalables à toute publication explicitement autorisée.

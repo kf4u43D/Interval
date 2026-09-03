@@ -257,7 +257,7 @@ class PerformanceUiProjectionsTest {
         assertEquals(PadArticulation.MUTED, projected.articulation)
         assertEquals(91, projected.defaultVelocity)
         assertEquals(state.instrument.strumNotes(), projected.tones.map(StrumToneUi::note))
-        assertEquals(projected.tones[0].note, projected.tones[2].note)
+        assertEquals(projected.tones[1].note, projected.tones[2].note)
     }
 
     @Test

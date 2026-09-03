@@ -11,9 +11,11 @@ import dev.intervaltablet.domain.MidiMapping
 import dev.intervaltablet.domain.MidiMessage
 import dev.intervaltablet.domain.PassThroughMode
 import dev.intervaltablet.domain.PadArticulation
+import dev.intervaltablet.domain.ScaleLibrary
 import dev.intervaltablet.domain.ToneRowAction
 import dev.intervaltablet.domain.ToneRowEntry
 import dev.intervaltablet.domain.ToneRowMode
+import dev.intervaltablet.domain.ToneRowPlayMode
 import dev.intervaltablet.domain.ToneRowState
 import dev.intervaltablet.domain.TransportAction
 import dev.intervaltablet.domain.TransportMode
@@ -648,6 +650,38 @@ class PerformanceCoordinatorTest {
     }
 
     @Test
+    fun scaleChangeRevoicesHeldTouchWithoutClearingItsPressedProjection() {
+        val source = TriggerSource.Touch(72)
+        var state = PerformanceCoordinatorState.initial(
+            InstrumentConfig(chord = ChordLibrary.triad, padArticulation = PadArticulation.STACKED),
+        )
+        state = coordinator.reduce(
+            state,
+            PerformanceCommand.Instrument(
+                InstrumentAction.PressInterval(source, 2, 100, timestampNanos = 10L),
+            ),
+        ).state
+
+        val changed = coordinator.reduce(
+            state,
+            PerformanceCommand.Instrument(
+                InstrumentAction.SetScale(ScaleLibrary.harmonicMinor, timestampNanos = 20L),
+            ),
+        )
+
+        assertEquals(2, changed.state.activeStepsBySource[source])
+        assertTrue(source in changed.state.instrument.heldPadBySource)
+        assertEquals(
+            listOf(64, 60, 57),
+            changed.midiMessages().filterIsInstance<MidiMessage.NoteOff>().map { it.note },
+        )
+        assertEquals(
+            listOf(63, 60, 56),
+            changed.midiMessages().filterIsInstance<MidiMessage.NoteOn>().map { it.note },
+        )
+    }
+
+    @Test
     fun automaticToneRowRemainsStackedWhenPadsAreMuted() {
         val initial = PerformanceCoordinatorState.initial(
             InstrumentConfig(chord = ChordLibrary.triad, padArticulation = PadArticulation.MUTED),
@@ -686,6 +720,250 @@ class PerformanceCoordinatorTest {
         )
         assertTrue(released.midiMessages().none { it is MidiMessage.NoteOff })
         assertTrue(source !in released.state.activeStepsBySource)
+    }
+
+    @Test
+    fun pausedToneRowAcceptsTouchMovementWithStoredVelocityAndKeepsTransportPaused() {
+        val source = TriggerSource.Touch(74)
+        val initial = stateWithManualRow().copy(
+            toneRow = playableRow().copy(mode = ToneRowMode.PAUSED),
+            transport = stateWithManualRow().transport.copy(mode = TransportMode.PAUSED),
+        )
+
+        val moved = coordinator.reduce(
+            initial,
+            PerformanceCommand.Instrument(
+                InstrumentAction.PressInterval(source, steps = 1, velocity = 120, timestampNanos = 40L),
+            ),
+        )
+
+        assertEquals(ToneRowMode.PAUSED, moved.state.toneRow.mode)
+        assertEquals(TransportMode.PAUSED, moved.state.transport.mode)
+        assertEquals(1, moved.state.toneRow.rowIndex)
+        assertEquals(1, moved.state.toneRow.lastManualSteps)
+        val noteOn = moved.midiMessages().filterIsInstance<MidiMessage.NoteOn>().single()
+        assertEquals(62, noteOn.note)
+        assertEquals(88, noteOn.velocity)
+
+        val released = coordinator.reduce(
+            moved.state,
+            PerformanceCommand.Instrument(InstrumentAction.Release(source, timestampNanos = 41L)),
+        )
+        assertEquals(listOf(62), released.midiMessages().filterIsInstance<MidiMessage.NoteOff>().map { it.note })
+        assertTrue(source !in released.state.activeStepsBySource)
+    }
+
+    @Test
+    fun mappedMidiVelocityOverridesStoredToneRowVelocityAndSameRepeatsTheLastManualMove() {
+        val mapping = MidiMapping(
+            mapOf(
+                MidiBindingKey(MidiBindingKey.Kind.NOTE, 40) to MidiAction.Move(1),
+                MidiBindingKey(MidiBindingKey.Kind.NOTE, 41) to MidiAction.Same,
+            ),
+        )
+        var state = stateWithManualRow().copy(mapping = mapping)
+
+        val moved = coordinator.reduce(
+            state,
+            PerformanceCommand.MidiMessages(7, 0, listOf(MidiMessage.NoteOn(2, 40, 117, 1L))),
+        )
+        assertEquals(1, moved.state.toneRow.rowIndex)
+        assertEquals(117, moved.midiMessages().filterIsInstance<MidiMessage.NoteOn>().single().velocity)
+        state = coordinator.reduce(
+            moved.state,
+            PerformanceCommand.MidiMessages(7, 0, listOf(MidiMessage.NoteOff(2, 40, 0, 2L))),
+        ).state
+
+        val same = coordinator.reduce(
+            state,
+            PerformanceCommand.MidiMessages(7, 0, listOf(MidiMessage.NoteOn(2, 41, 109, 3L))),
+        )
+        assertEquals(2, same.state.toneRow.rowIndex)
+        assertEquals(1, same.state.toneRow.lastManualSteps)
+        val sameNote = same.midiMessages().filterIsInstance<MidiMessage.NoteOn>().single()
+        assertEquals(64, sameNote.note)
+        assertEquals(109, sameNote.velocity)
+        assertEquals(
+            1,
+            same.state.activeStepsBySource[TriggerSource.Midi(7, 0, 2, 41)],
+        )
+    }
+
+    @Test
+    fun mappedSamePitchRepeatsTheActualSemitoneRatioOutsideTheScale() {
+        val mapping = MidiMapping(
+            mapOf(
+                MidiBindingKey(MidiBindingKey.Kind.NOTE, 40) to MidiAction.Move(1),
+                MidiBindingKey(MidiBindingKey.Kind.NOTE, 41) to MidiAction.SamePitch,
+            ),
+        )
+        var state = PerformanceCoordinatorState.initial().copy(mapping = mapping)
+
+        repeat(2) { index ->
+            state = coordinator.reduce(
+                state,
+                PerformanceCommand.MidiMessages(
+                    8,
+                    0,
+                    listOf(MidiMessage.NoteOn(0, 40, 90, (index * 2 + 1).toLong())),
+                ),
+            ).state
+            state = coordinator.reduce(
+                state,
+                PerformanceCommand.MidiMessages(
+                    8,
+                    0,
+                    listOf(MidiMessage.NoteOff(0, 40, 0, (index * 2 + 2).toLong())),
+                ),
+            ).state
+        }
+
+        val samePitch = coordinator.reduce(
+            state,
+            PerformanceCommand.MidiMessages(8, 0, listOf(MidiMessage.NoteOn(0, 41, 100, 5L))),
+        )
+        assertEquals(66, samePitch.state.instrument.currentNote)
+        assertEquals(66, samePitch.midiMessages().filterIsInstance<MidiMessage.NoteOn>().single().note)
+    }
+
+    @Test
+    fun randomAndChromaticShiftMappingsStayImmediateWithoutChangingToneRowTransforms() {
+        val mapping = MidiMapping(
+            mapOf(
+                MidiBindingKey(MidiBindingKey.Kind.NOTE, 50) to MidiAction.ChromaticShift(1),
+                MidiBindingKey(MidiBindingKey.Kind.NOTE, 51) to MidiAction.Random,
+            ),
+        )
+        val initial = stateWithManualRow().copy(mapping = mapping)
+        val held = coordinator.reduce(
+            initial,
+            PerformanceCommand.MidiMessages(9, 0, listOf(MidiMessage.NoteOn(0, 50, 127, 1L))),
+        )
+        assertTrue(held.midiMessages().none { it is MidiMessage.NoteOn })
+        assertEquals(1, held.state.instrument.activeChromaticShiftSemitones)
+
+        val random = coordinator.reduce(
+            held.state,
+            PerformanceCommand.MidiMessages(9, 0, listOf(MidiMessage.NoteOn(0, 51, 99, 2L))),
+        )
+        val noteOn = random.midiMessages().filterIsInstance<MidiMessage.NoteOn>().single()
+        assertEquals(
+            random.state.instrument.config.grid().moveChromatic(random.state.instrument.currentNote, 1),
+            noteOn.note,
+        )
+        assertEquals(ToneRowPlayMode.PRIME, random.state.toneRow.playMode)
+        assertEquals(0, random.state.toneRow.transpositionSemitones)
+
+        val releasedShift = coordinator.reduce(
+            random.state,
+            PerformanceCommand.MidiMessages(9, 0, listOf(MidiMessage.NoteOff(0, 50, 0, 3L))),
+        )
+        assertEquals(0, releasedShift.state.instrument.activeChromaticShiftSemitones)
+        assertTrue(releasedShift.midiMessages().none { it is MidiMessage.NoteOff })
+    }
+
+    @Test
+    fun heldNoteAndCcShiftsKeepTheirOriginalLeasesAcrossAMappingReplacement() {
+        val noteKey = MidiBindingKey(MidiBindingKey.Kind.NOTE, 52)
+        val ccKey = MidiBindingKey(MidiBindingKey.Kind.CC, 53)
+        val originalMapping = MidiMapping(
+            bindings = mapOf(
+                noteKey to MidiAction.ChromaticShift(1),
+                ccKey to MidiAction.ChromaticShift(2),
+            ),
+            ccThresholds = mapOf(ccKey to 64),
+        )
+        val originalDestination = MidiDestinationId("shift-lease-origin")
+        val initial = PerformanceCoordinatorState.initial().copy(
+            mapping = originalMapping,
+            currentDestination = originalDestination,
+        )
+
+        val heldNote = coordinator.reduce(
+            initial,
+            PerformanceCommand.MidiMessages(
+                deviceId = 11,
+                portNumber = 1,
+                messages = listOf(MidiMessage.NoteOn(3, 52, 100, 1L)),
+            ),
+        )
+        val heldCc = coordinator.reduce(
+            heldNote.state,
+            PerformanceCommand.MidiMessages(
+                deviceId = 11,
+                portNumber = 1,
+                messages = listOf(MidiMessage.ControlChange(3, 53, 100, 2L)),
+            ),
+        )
+        assertEquals(3, heldCc.state.instrument.activeChromaticShiftSemitones)
+        assertEquals(2, heldCc.state.router.activeLeaseCount)
+        assertEquals(1, heldCc.state.router.activeCcGateCount)
+        val noteLease = heldCc.state.router.leaseSnapshot().single()
+        assertEquals(TriggerSource.Midi(11, 1, 3, 52), noteLease.source)
+        assertEquals(originalDestination, noteLease.destination)
+        assertTrue(heldCc.midiMessages().none { it is MidiMessage.NoteOff })
+
+        val replacement = MidiMapping(emptyMap())
+        val remapped = coordinator.reduce(
+            heldCc.state,
+            PerformanceCommand.SetMapping(replacement),
+        )
+        assertEquals(replacement, remapped.state.mapping)
+        assertEquals(3, remapped.state.instrument.activeChromaticShiftSemitones)
+        assertEquals(2, remapped.state.router.activeLeaseCount)
+        assertEquals(originalDestination, remapped.state.router.leaseSnapshot().single().destination)
+
+        val releasedNote = coordinator.reduce(
+            remapped.state,
+            PerformanceCommand.MidiMessages(
+                deviceId = 11,
+                portNumber = 1,
+                messages = listOf(MidiMessage.NoteOff(3, 52, 0, 3L)),
+            ),
+        )
+        assertEquals(2, releasedNote.state.instrument.activeChromaticShiftSemitones)
+        assertEquals(1, releasedNote.state.router.activeLeaseCount)
+        assertEquals(1, releasedNote.state.router.activeCcGateCount)
+        assertTrue(releasedNote.midiMessages().none { it is MidiMessage.NoteOff })
+
+        val releasedCc = coordinator.reduce(
+            releasedNote.state,
+            PerformanceCommand.MidiMessages(
+                deviceId = 11,
+                portNumber = 1,
+                messages = listOf(MidiMessage.ControlChange(3, 53, 0, 4L)),
+            ),
+        )
+        assertEquals(0, releasedCc.state.instrument.activeChromaticShiftSemitones)
+        assertEquals(0, releasedCc.state.router.activeLeaseCount)
+        assertEquals(0, releasedCc.state.router.activeCcGateCount)
+        assertTrue(releasedCc.midiMessages().none { it is MidiMessage.NoteOff })
+    }
+
+    @Test
+    fun recordCancelsAnExistingTakeForMappedAndDirectStartRequests() {
+        val mapping = MidiMapping(
+            mapOf(MidiBindingKey(MidiBindingKey.Kind.NOTE, 42) to MidiAction.Record),
+        )
+        val recording = PerformanceCoordinatorState.initial().copy(
+            mapping = mapping,
+            toneRow = recordingRow(),
+        )
+
+        val mapped = coordinator.reduce(
+            recording,
+            PerformanceCommand.MidiMessages(10, 0, listOf(MidiMessage.NoteOn(0, 42, 100, 1L))),
+        )
+        assertEquals(ToneRowMode.IDLE, mapped.state.toneRow.mode)
+        assertTrue(mapped.state.toneRow.entries.isEmpty())
+        assertEquals(null, mapped.state.toneRow.currentRecordNote)
+
+        val direct = coordinator.reduce(
+            recording,
+            PerformanceCommand.ToneRow(ToneRowAction.StartRecording(60), 2L),
+        )
+        assertEquals(ToneRowMode.IDLE, direct.state.toneRow.mode)
+        assertTrue(direct.state.toneRow.entries.isEmpty())
     }
 
     @Test

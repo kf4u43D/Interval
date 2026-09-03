@@ -973,6 +973,14 @@ private fun playbackModeLabel(mode: ToneRowUiPlaybackMode): String {
         ToneRowUiPlaybackMode.RETRO -> stringResource(R.string.tone_row_mode_retro)
         ToneRowUiPlaybackMode.RANDOM -> stringResource(R.string.tone_row_mode_random)
         ToneRowUiPlaybackMode.PENDULUM -> stringResource(R.string.tone_row_mode_pendulum)
+        ToneRowUiPlaybackMode.AUTO_TRANSPOSE_UP ->
+            stringResource(R.string.tone_row_mode_auto_transpose_up)
+        ToneRowUiPlaybackMode.AUTO_TRANSPOSE_DOWN ->
+            stringResource(R.string.tone_row_mode_auto_transpose_down)
+        ToneRowUiPlaybackMode.AUTO_TRANSLATE_UP ->
+            stringResource(R.string.tone_row_mode_auto_translate_up)
+        ToneRowUiPlaybackMode.AUTO_TRANSLATE_DOWN ->
+            stringResource(R.string.tone_row_mode_auto_translate_down)
     }
 }
 

@@ -1,6 +1,7 @@
 package dev.intervaltablet
 
 import android.app.Application
+import android.os.Process
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.intervaltablet.audio.AudioDiagnostics
@@ -20,6 +21,7 @@ import dev.intervaltablet.data.MusicalContextSnapshot
 import dev.intervaltablet.data.toPersistenceSnapshot
 import dev.intervaltablet.data.toStoppedDomainState
 import dev.intervaltablet.domain.AudioCommand
+import dev.intervaltablet.domain.ArpeggiatorConfig
 import dev.intervaltablet.domain.ChordDefinition
 import dev.intervaltablet.domain.ChordLibrary
 import dev.intervaltablet.domain.ClockSource
@@ -27,6 +29,12 @@ import dev.intervaltablet.domain.DefaultMidiMap
 import dev.intervaltablet.domain.InstrumentAction
 import dev.intervaltablet.domain.InstrumentConfig
 import dev.intervaltablet.domain.MidiDestinationId
+import dev.intervaltablet.domain.MidiBindingKey
+import dev.intervaltablet.domain.MidiMappingEditorAction
+import dev.intervaltablet.domain.MidiMappingEditorEvent
+import dev.intervaltablet.domain.MidiMappingEditorReducer
+import dev.intervaltablet.domain.MidiMappingEditorState
+import dev.intervaltablet.domain.MidiMappingSaveRejection
 import dev.intervaltablet.domain.MidiMessage
 import dev.intervaltablet.domain.MidiNoteRange
 import dev.intervaltablet.domain.MidiRouterState
@@ -36,12 +44,15 @@ import dev.intervaltablet.domain.PitchMoveResult
 import dev.intervaltablet.domain.ScaleDefinition
 import dev.intervaltablet.domain.ScaleLibrary
 import dev.intervaltablet.domain.SynthPatch
+import dev.intervaltablet.domain.SynthParameter
 import dev.intervaltablet.domain.ToneRowAction
 import dev.intervaltablet.domain.ToneRowMode
 import dev.intervaltablet.domain.ToneRowPlayMode
 import dev.intervaltablet.domain.TransportAction
 import dev.intervaltablet.domain.TransportMode
+import dev.intervaltablet.domain.TimeSignature
 import dev.intervaltablet.domain.TriggerSource
+import dev.intervaltablet.domain.hasStandaloneArpeggio
 import dev.intervaltablet.domain.midiNoteName
 import dev.intervaltablet.midi.AndroidMidiRepository
 import dev.intervaltablet.midi.MidiConnectionState
@@ -57,13 +68,16 @@ import dev.intervaltablet.midi.MidiRepositoryState
 import dev.intervaltablet.ui.ToneRowUiClockSource
 import dev.intervaltablet.ui.ToneRowUiIntent
 import dev.intervaltablet.ui.ToneRowUiPlaybackMode
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -78,6 +92,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 data class AppUiState(
     val performance: PerformanceCoordinatorState = PerformanceCoordinatorState.initial(),
+    val midiMappingEditor: MidiMappingEditorState = MidiMappingEditorState.Closed,
     val midi: MidiRepositoryState = MidiRepositoryState(),
     val audioMonitorEnabled: Boolean = true,
     val audioAvailable: Boolean = false,
@@ -128,21 +143,74 @@ private data class PersistenceRequest(
     val source: PersistenceSource,
 )
 
+private data class ScheduledArpeggio(
+    val generation: Long,
+    val dueNanos: Long,
+    val periodNanos: Long,
+    val job: Job,
+)
+
+private data class ScheduledArpeggioGate(
+    val generation: Long,
+    val dueNanos: Long,
+    val durationNanos: Long,
+    val job: Job,
+)
+
+private data class MidiLearnSuppressionKey(
+    val deviceId: Int,
+    val portNumber: Int,
+    val channel: Int,
+    val kind: MidiBindingKey.Kind,
+    val number: Int,
+)
+
+private data class MidiLearnSuppressionLease(
+    val key: MidiLearnSuppressionKey,
+    val ccThreshold: Int? = null,
+)
+
+/**
+ * The musical actor must not compete with Compose work on Dispatchers.Default. This owned
+ * single thread preserves FIFO ordering while Android's audio priority reduces scheduler delay
+ * between a touch callback and the native/MIDI enqueue. The actual audio callback remains Oboe's.
+ */
+private fun createMusicalActorDispatcher(): ExecutorCoroutineDispatcher {
+    return Executors.newSingleThreadExecutor { command ->
+        Thread(
+            {
+                runCatching { Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO) }
+                command.run()
+            },
+            "IntervalMusicalActor",
+        ).apply { isDaemon = true }
+    }.asCoroutineDispatcher()
+}
+
 class IntervalTabletViewModel @JvmOverloads constructor(
     application: Application,
     private val clock: MonotonicClock = SystemMonotonicClock,
     private val audioEngine: AudioMonitor = NativeAudioEngine(),
     midiRepositoryFactory: ((MidiPacketSink) -> MidiPortRepository)? = null,
     settingsStoreFactory: ((Application) -> SettingsStore)? = null,
-    private val actorDispatcher: CoroutineDispatcher = Dispatchers.Default.limitedParallelism(1),
+    actorDispatcher: CoroutineDispatcher? = null,
     private val persistenceDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val diagnosticsDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : AndroidViewModel(application) {
+    private val ownedActorDispatcher: ExecutorCoroutineDispatcher? =
+        if (actorDispatcher == null) createMusicalActorDispatcher() else null
+    private val musicalActorDispatcher: CoroutineDispatcher =
+        actorDispatcher ?: checkNotNull(ownedActorDispatcher)
     private val coordinator = PerformanceCoordinator()
+    private val midiMappingEditorReducer = MidiMappingEditorReducer()
     private var performanceState = PerformanceCoordinatorState.initial()
+    private var midiMappingEditorState = midiMappingEditorReducer.initialState()
     private var midiState = MidiRepositoryState()
     private val connectionParser = MidiConnectionParser()
     private val lastMidiTimestampByDestination = mutableMapOf<MidiDestinationId, Long>()
+    private val midiLearnSuppressionLeases =
+        mutableMapOf<MidiLearnSuppressionKey, MidiLearnSuppressionLease>()
+    private var midiLearnCandidateSuppressionKey: MidiLearnSuppressionKey? = null
 
     private var audioMonitorEnabled: Boolean = true
     private var audioRunning: Boolean = false
@@ -161,6 +229,9 @@ class IntervalTabletViewModel @JvmOverloads constructor(
     private var selectedPresetSlot: Int = 0
     private var internalClockJob: Job? = null
     private var toneRowReleaseJob: Job? = null
+    private val scheduledArpeggios = mutableMapOf<TriggerSource, ScheduledArpeggio>()
+    private val scheduledArpeggioGates = mutableMapOf<TriggerSource, ScheduledArpeggioGate>()
+    private var arpeggioGeneration: Long = 0L
     private var internalClockGeneration: Long = 0L
     private var scheduledInternalTickNanos: Long? = null
     private var persistenceDirty: Boolean = false
@@ -199,7 +270,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
             )
 
     init {
-        viewModelScope.launch(actorDispatcher) {
+        viewModelScope.launch(musicalActorDispatcher) {
             for (command in mailbox) {
                 synchronized(actorGuard) {
                     if (!closing.get()) {
@@ -210,6 +281,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
                         }
                         flushPersistenceIfDirty()
                         reconcileInternalClock()
+                        reconcileStandaloneArpeggios()
                         publish()
                     }
                 }
@@ -222,19 +294,19 @@ class IntervalTabletViewModel @JvmOverloads constructor(
                 persistenceSupervisor.complete()
             }
         }
-        viewModelScope.launch(actorDispatcher) {
+        viewModelScope.launch(musicalActorDispatcher) {
             midiRepository.state
                 .distinctUntilChangedBy(MidiRepositoryState::operationalKey)
                 .collect { state -> mailbox.send(MailboxCommand.MidiStateChanged(state)) }
         }
-        viewModelScope.launch(actorDispatcher) {
+        viewModelScope.launch(musicalActorDispatcher) {
             midiRepository.events.collect { event -> mailbox.send(MailboxCommand.MidiEventReceived(event)) }
         }
         viewModelScope.launch(persistenceDispatcher) {
             val stored = runCatching { settingsRepository.settings.first() }.getOrElse { StoredSettings() }
             mailbox.send(MailboxCommand.ApplyStoredSettings(stored))
         }
-        viewModelScope.launch(actorDispatcher) {
+        viewModelScope.launch(musicalActorDispatcher) {
             while (isActive) {
                 delay(DIAGNOSTICS_PERIOD_MILLIS)
                 requestDiagnosticsSample()
@@ -304,6 +376,32 @@ class IntervalTabletViewModel @JvmOverloads constructor(
         reduceAndPersist(InstrumentAction.SetPadArticulation(mode, clock.nowNanos()))
     }
 
+    fun setArpeggiatorConfig(config: ArpeggiatorConfig) {
+        reduceAndPersist(InstrumentAction.SetArpeggiatorConfig(config, clock.nowNanos()))
+    }
+
+    fun setTempo(bpm: Int) {
+        enqueueControl(MailboxCommand.SetTempo(bpm.coerceIn(20, 300)))
+    }
+
+    fun setClockDivision(clocks: Int) {
+        reduceTransportAndPersist(TransportAction.SetClocksPerStep(clocks.coerceIn(1, 96)))
+    }
+
+    fun setArpeggioGate(percent: Int) {
+        reduceTransportAndPersist(TransportAction.SetNoteDuration(percent.coerceIn(1, 100)))
+    }
+
+    fun setTimeSignature(beatsPerBar: Int, beatUnit: Int) {
+        reduceTransportAndPersist(
+            TransportAction.SetTimeSignature(TimeSignature(beatsPerBar, beatUnit)),
+        )
+    }
+
+    fun setForceToScale(enabled: Boolean) {
+        reduceAndPersist(InstrumentAction.SetForceToScale(enabled, clock.nowNanos()))
+    }
+
     fun strumTone(index: Int, velocity: Int) {
         if (index < 0 || velocity !in 1..127) return
         val source = TriggerSource.System("ui:strum:${oneShotSequence.incrementAndGet()}")
@@ -347,13 +445,19 @@ class IntervalTabletViewModel @JvmOverloads constructor(
     }
 
     fun resetMidiMapping() {
-        enqueueControl(
-            MailboxCommand.Reduce(
-                commands = listOf(PerformanceCommand.SetMapping(DefaultMidiMap.mapping)),
-                persistAfter = true,
-                completionStatus = "Mapping MIDI réinitialisé",
-            ),
-        )
+        enqueueControl(MailboxCommand.ResetMidiMapping)
+    }
+
+    fun openMidiMappingEditor() {
+        enqueueControl(MailboxCommand.OpenMidiMappingEditor)
+    }
+
+    fun onMidiMappingEditorAction(action: MidiMappingEditorAction) {
+        enqueueControl(MailboxCommand.MidiMappingEditorActionReceived(action))
+    }
+
+    fun saveMidiMappingEditor() {
+        enqueueControl(MailboxCommand.SaveMidiMappingEditor)
     }
 
     fun selectSource(descriptor: MidiPortDescriptor?) {
@@ -408,7 +512,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
     }
 
     private fun scheduleOneShotRelease(source: TriggerSource.System, durationMillis: Long) {
-        viewModelScope.launch(actorDispatcher) {
+        viewModelScope.launch(musicalActorDispatcher) {
             delay(durationMillis)
             enqueueControl(
                 MailboxCommand.Reduce(
@@ -431,6 +535,15 @@ class IntervalTabletViewModel @JvmOverloads constructor(
         )
     }
 
+    private fun reduceTransportAndPersist(action: TransportAction) {
+        enqueueControl(
+            MailboxCommand.Reduce(
+                commands = listOf(PerformanceCommand.Transport(action)),
+                persistAfter = true,
+            ),
+        )
+    }
+
     private fun offerPacket(packet: MidiInputPacket): Boolean {
         if (closing.get()) return false
         if (mailbox.trySend(MailboxCommand.MidiPacketReceived(packet)).isSuccess) return true
@@ -443,7 +556,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
     private fun enqueueControl(command: MailboxCommand) {
         if (closing.get()) return
         if (mailbox.trySend(command).isSuccess) return
-        viewModelScope.launch(actorDispatcher) {
+        viewModelScope.launch(musicalActorDispatcher) {
             runCatching { mailbox.send(command) }
         }
     }
@@ -451,7 +564,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
     private fun scheduleOverflowRecovery() {
         if (closing.get()) return
         if (!overflowRecoveryQueued.compareAndSet(false, true)) return
-        viewModelScope.launch(actorDispatcher) {
+        viewModelScope.launch(musicalActorDispatcher) {
             runCatching { mailbox.send(MailboxCommand.RecoverFromOverflow(clock.nowNanos())) }
         }
     }
@@ -517,6 +630,28 @@ class IntervalTabletViewModel @JvmOverloads constructor(
                 )
             }
             is MailboxCommand.MidiPacketReceived -> handleMidiPacket(command.packet)
+            MailboxCommand.OpenMidiMappingEditor -> if (settingsLoaded) {
+                handleMidiMappingEditorAction(
+                    MidiMappingEditorAction.Open(performanceState.mapping),
+                )
+            }
+            is MailboxCommand.MidiMappingEditorActionReceived -> if (settingsLoaded) {
+                val action = when (command.action) {
+                    is MidiMappingEditorAction.Open -> MidiMappingEditorAction.Open(
+                        performanceState.mapping,
+                    )
+                    is MidiMappingEditorAction.Save -> MidiMappingEditorAction.Save(
+                        performanceState.mapping,
+                    )
+                    else -> command.action
+                }
+                handleMidiMappingEditorAction(action)
+            }
+            MailboxCommand.SaveMidiMappingEditor -> if (settingsLoaded) {
+                handleMidiMappingEditorAction(
+                    MidiMappingEditorAction.Save(performanceState.mapping),
+                )
+            }
             is MailboxCommand.MidiStateChanged -> handleMidiState(command.state)
             is MailboxCommand.MidiEventReceived -> handleMidiEvent(command.event)
             is MailboxCommand.ApplyStoredSettings -> applyStoredSettings(command.settings)
@@ -530,6 +665,11 @@ class IntervalTabletViewModel @JvmOverloads constructor(
                 handleToneRowIntent(command.intent)
             }
             is MailboxCommand.InternalClockDue -> handleInternalClockDue(command)
+            is MailboxCommand.ArpeggioDue -> handleArpeggioDue(command)
+            is MailboxCommand.ArpeggioGateDue -> handleArpeggioGateDue(command)
+            is MailboxCommand.SetTempo -> if (settingsLoaded) {
+                applyTempo(command.bpm)
+            }
             MailboxCommand.ToggleAudioEnabled -> if (settingsLoaded) {
                 handleAudioEnabled(!audioMonitorEnabled)
             }
@@ -539,8 +679,20 @@ class IntervalTabletViewModel @JvmOverloads constructor(
             is MailboxCommand.PreviewSynthPatch -> if (settingsLoaded) {
                 handleSynthPatchPreview(command.patch)
             }
+            MailboxCommand.ResetMidiMapping -> if (settingsLoaded) {
+                closeMidiMappingEditor()
+                handleReduce(
+                    MailboxCommand.Reduce(
+                        commands = listOf(PerformanceCommand.SetMapping(DefaultMidiMap.mapping)),
+                        persistAfter = true,
+                        completionStatus = "Mapping MIDI réinitialisé",
+                    ),
+                )
+            }
             MailboxCommand.TogglePerformanceLock -> if (settingsLoaded) {
-                performanceLock = !performanceLock
+                val nextLocked = !performanceLock
+                if (nextLocked) closeMidiMappingEditor()
+                performanceLock = nextLocked
                 markPersistenceDirty()
             }
             MailboxCommand.HostStarted -> handleHostStarted()
@@ -551,6 +703,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
             is MailboxCommand.PersistenceSucceeded -> handlePersistenceSuccess(command)
             is MailboxCommand.RecoverFromOverflow -> {
                 overflowRecoveryQueued.set(false)
+                closeMidiMappingEditor()
                 applyPerformanceCommand(PerformanceCommand.Panic(command.timestampNanos))
                 connectionParser.resetConnection()
                 statusMessage = "File d’événements saturée : Panic de récupération exécuté"
@@ -579,6 +732,93 @@ class IntervalTabletViewModel @JvmOverloads constructor(
         command.commands.forEach(::applyPerformanceCommand)
         if (command.persistAfter) markPersistenceDirty()
         command.completionStatus?.let { statusMessage = it }
+    }
+
+    private fun canCaptureMidiMapping(): Boolean {
+        return hostStarted && midiState.sourceConnection.phase == MidiConnectionPhase.OPEN
+    }
+
+    private fun handleMidiMappingEditorAction(action: MidiMappingEditorAction) {
+        if (performanceLock && action != MidiMappingEditorAction.Cancel) return
+        if (action is MidiMappingEditorAction.Arm && !canCaptureMidiMapping()) {
+            statusMessage = "Connectez une entree MIDI avant de lancer l apprentissage"
+            return
+        }
+        val transition = midiMappingEditorReducer.reduce(midiMappingEditorState, action)
+        midiMappingEditorState = transition.state
+        val captureAfterAction = (midiMappingEditorState as? MidiMappingEditorState.Editing)
+            ?.capture
+        if (
+            action is MidiMappingEditorAction.SetCandidateThreshold &&
+            captureAfterAction is dev.intervaltablet.domain.MidiMappingCapture.Captured
+        ) {
+            updateMidiLearnSuppressionThreshold(action.threshold)
+        }
+        transition.events.forEach { event ->
+            handleMidiMappingEditorEvent(
+                event = event,
+                cancellationRequested = action == MidiMappingEditorAction.Cancel,
+            )
+        }
+    }
+
+    private fun handleMidiMappingEditorEvent(
+        event: MidiMappingEditorEvent,
+        cancellationRequested: Boolean,
+    ) {
+        when (event) {
+            MidiMappingEditorEvent.PanicRequested -> applyPerformanceCommand(
+                PerformanceCommand.Panic(clock.nowNanos().coerceAtLeast(0L)),
+            )
+            is MidiMappingEditorEvent.CandidateCaptured -> {
+                val binding = event.candidate.binding
+                val kind = when (binding.key.kind) {
+                    dev.intervaltablet.domain.MidiBindingKey.Kind.NOTE -> "Note"
+                    dev.intervaltablet.domain.MidiBindingKey.Kind.CC -> "CC"
+                }
+                statusMessage = "$kind ${binding.key.number} capture"
+            }
+            is MidiMappingEditorEvent.ReplacementRequired -> {
+                statusMessage = "Ce controle est deja assigne : confirmez le remplacement"
+            }
+            MidiMappingEditorEvent.DraftChanged -> Unit
+            is MidiMappingEditorEvent.CommitRequested -> commitMidiMapping(event)
+            is MidiMappingEditorEvent.SaveRejected -> {
+                statusMessage = when (event.reason) {
+                    MidiMappingSaveRejection.UNRESOLVED_CAPTURE ->
+                        "Ajoutez ou annulez le controle capture avant d enregistrer"
+                    MidiMappingSaveRejection.STALE_BASELINE ->
+                        "Le mapping a change : annulez puis rouvrez l editeur"
+                }
+            }
+            MidiMappingEditorEvent.Cancelled -> {
+                if (cancellationRequested) {
+                    statusMessage = "Modification du mapping MIDI annulee"
+                }
+            }
+        }
+    }
+
+    private fun commitMidiMapping(event: MidiMappingEditorEvent.CommitRequested) {
+        if (performanceState.mapping != event.expectedBaseline) {
+            statusMessage = "Le mapping a change : rouvrez l editeur"
+            return
+        }
+        val changed = event.replacement != performanceState.mapping
+        applyPerformanceCommand(PerformanceCommand.SetMapping(event.replacement))
+        statusMessage = if (changed) {
+            "Mapping MIDI enregistre"
+        } else {
+            "Mapping MIDI inchange"
+        }
+    }
+
+    private fun closeMidiMappingEditor() {
+        if (midiMappingEditorState == MidiMappingEditorState.Closed) return
+        midiMappingEditorState = midiMappingEditorReducer.reduce(
+            midiMappingEditorState,
+            MidiMappingEditorAction.Cancel,
+        ).state
     }
 
     private fun handleToneRowIntent(intent: ToneRowUiIntent) {
@@ -620,6 +860,14 @@ class IntervalTabletViewModel @JvmOverloads constructor(
                             ToneRowUiPlaybackMode.RETRO -> ToneRowPlayMode.RETRO
                             ToneRowUiPlaybackMode.RANDOM -> ToneRowPlayMode.RANDOM
                             ToneRowUiPlaybackMode.PENDULUM -> ToneRowPlayMode.PENDULUM
+                            ToneRowUiPlaybackMode.AUTO_TRANSPOSE_UP ->
+                                ToneRowPlayMode.AUTO_TRANSPOSE_UP
+                            ToneRowUiPlaybackMode.AUTO_TRANSPOSE_DOWN ->
+                                ToneRowPlayMode.AUTO_TRANSPOSE_DOWN
+                            ToneRowUiPlaybackMode.AUTO_TRANSLATE_UP ->
+                                ToneRowPlayMode.AUTO_TRANSLATE_UP
+                            ToneRowUiPlaybackMode.AUTO_TRANSLATE_DOWN ->
+                                ToneRowPlayMode.AUTO_TRANSLATE_DOWN
                         },
                     ),
                     timestamp,
@@ -665,12 +913,8 @@ class IntervalTabletViewModel @JvmOverloads constructor(
             is ToneRowUiIntent.SelectSequenceStep -> applyPerformanceCommand(
                 PerformanceCommand.ToneRow(ToneRowAction.SelectSequenceStep(intent.index), timestamp),
             )
-            is ToneRowUiIntent.ChangeTempo -> applyPerformanceCommand(
-                PerformanceCommand.Transport(
-                    TransportAction.SetTempo(
-                        (performanceState.transport.tempoBpm + intent.deltaBpm).coerceIn(20, 300),
-                    ),
-                ),
+            is ToneRowUiIntent.ChangeTempo -> applyTempo(
+                (performanceState.transport.tempoBpm + intent.deltaBpm).coerceIn(20, 300),
             )
             is ToneRowUiIntent.ChangeClockDivision -> {
                 val currentIndex = CLOCK_DIVISIONS.indices.minBy {
@@ -746,7 +990,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
         if (due == null) return
 
         val generation = internalClockGeneration
-        internalClockJob = viewModelScope.launch(actorDispatcher) {
+        internalClockJob = viewModelScope.launch(musicalActorDispatcher) {
             val remaining = due - clock.nowNanos()
             if (remaining > 0L) delay(ceilNanosToMillis(remaining))
             enqueueControl(MailboxCommand.InternalClockDue(generation, due))
@@ -772,6 +1016,111 @@ class IntervalTabletViewModel @JvmOverloads constructor(
         )
     }
 
+    private fun reconcileStandaloneArpeggios() {
+        val desiredSources = performanceState.instrument.heldPadBySource.keys
+            .filterTo(linkedSetOf()) { source ->
+                settingsLoaded && hostStarted && performanceState.instrument.hasStandaloneArpeggio(source)
+            }
+        scheduledArpeggios.keys.toList().forEach { source ->
+            if (source !in desiredSources) {
+                scheduledArpeggios.remove(source)?.job?.cancel()
+            }
+        }
+        scheduledArpeggioGates.keys.toList().forEach { source ->
+            if (source !in desiredSources || source !in performanceState.instrument.activeBySource) {
+                scheduledArpeggioGates.remove(source)?.job?.cancel()
+            }
+        }
+
+        val periodNanos = performanceState.transport.stepDurationNanos()
+        desiredSources.forEach { source ->
+            val existing = scheduledArpeggios[source]
+            if (existing != null && existing.periodNanos == periodNanos) return@forEach
+            existing?.job?.cancel()
+
+            arpeggioGeneration = nextSequence(arpeggioGeneration)
+            val generation = arpeggioGeneration
+            val now = clock.nowNanos().coerceAtLeast(0L)
+            val due = safeAddNanos(now, periodNanos)
+            val job = viewModelScope.launch(musicalActorDispatcher) {
+                val remaining = due - clock.nowNanos().coerceAtLeast(0L)
+                if (remaining > 0L) delay(ceilNanosToMillis(remaining))
+                enqueueControl(MailboxCommand.ArpeggioDue(source, generation, due))
+            }
+            scheduledArpeggios[source] = ScheduledArpeggio(
+                generation = generation,
+                dueNanos = due,
+                periodNanos = periodNanos,
+                job = job,
+            )
+        }
+
+        val gateDurationNanos = performanceState.transport.noteDurationNanos()
+        if (gateDurationNanos < periodNanos) {
+            desiredSources.forEach { source ->
+                if (source !in performanceState.instrument.activeBySource) return@forEach
+                val existing = scheduledArpeggioGates[source]
+                if (existing != null && existing.durationNanos == gateDurationNanos) return@forEach
+                existing?.job?.cancel()
+                arpeggioGeneration = nextSequence(arpeggioGeneration)
+                val generation = arpeggioGeneration
+                val now = clock.nowNanos().coerceAtLeast(0L)
+                val due = safeAddNanos(now, gateDurationNanos)
+                val job = viewModelScope.launch(musicalActorDispatcher) {
+                    val remaining = due - clock.nowNanos().coerceAtLeast(0L)
+                    if (remaining > 0L) delay(ceilNanosToMillis(remaining))
+                    enqueueControl(MailboxCommand.ArpeggioGateDue(source, generation, due))
+                }
+                scheduledArpeggioGates[source] = ScheduledArpeggioGate(
+                    generation = generation,
+                    dueNanos = due,
+                    durationNanos = gateDurationNanos,
+                    job = job,
+                )
+            }
+        } else {
+            scheduledArpeggioGates.values.forEach { it.job.cancel() }
+            scheduledArpeggioGates.clear()
+        }
+    }
+
+    private fun handleArpeggioDue(command: MailboxCommand.ArpeggioDue) {
+        val scheduled = scheduledArpeggios[command.source] ?: return
+        if (scheduled.generation != command.generation || scheduled.dueNanos != command.dueNanos) return
+        scheduledArpeggios.remove(command.source)
+        scheduledArpeggioGates.remove(command.source)?.job?.cancel()
+        if (
+            !settingsLoaded ||
+            !hostStarted ||
+            !performanceState.instrument.hasStandaloneArpeggio(command.source)
+        ) {
+            return
+        }
+        applyPerformanceCommand(
+            PerformanceCommand.Instrument(
+                InstrumentAction.AdvanceArpeggio(
+                    source = command.source,
+                    timestampNanos = maxOf(command.dueNanos, clock.nowNanos(), 0L),
+                ),
+            ),
+        )
+    }
+
+    private fun handleArpeggioGateDue(command: MailboxCommand.ArpeggioGateDue) {
+        val scheduled = scheduledArpeggioGates[command.source] ?: return
+        if (scheduled.generation != command.generation || scheduled.dueNanos != command.dueNanos) return
+        scheduledArpeggioGates.remove(command.source)
+        if (command.source !in performanceState.instrument.heldPadBySource) return
+        applyPerformanceCommand(
+            PerformanceCommand.Instrument(
+                InstrumentAction.ReleaseArpeggioVoice(
+                    source = command.source,
+                    timestampNanos = maxOf(command.dueNanos, clock.nowNanos(), 0L),
+                ),
+            ),
+        )
+    }
+
     private fun handleMidiPacket(packet: MidiInputPacket) {
         val connection = midiState.sourceConnection
         if (!settingsLoaded || !hostStarted || connection.phase != MidiConnectionPhase.OPEN) return
@@ -779,6 +1128,8 @@ class IntervalTabletViewModel @JvmOverloads constructor(
 
         val messages = connectionParser.consume(packet)
         messages.forEach { message ->
+            if (consumeMidiLearnSuppression(packet, message)) return@forEach
+            if (interceptMidiMappingInput(packet, message)) return@forEach
             when (
                 val recall = PresetMidiPolicy.resolve(
                     message = message,
@@ -804,6 +1155,128 @@ class IntervalTabletViewModel @JvmOverloads constructor(
         }
     }
 
+    private fun interceptMidiMappingInput(
+        packet: MidiInputPacket,
+        message: MidiMessage,
+    ): Boolean {
+        val transition = midiMappingEditorReducer.reduce(
+            midiMappingEditorState,
+            MidiMappingEditorAction.Receive(message),
+        )
+        midiMappingEditorState = transition.state
+        transition.events.forEach { event ->
+            if (event is MidiMappingEditorEvent.CandidateCaptured) {
+                armMidiLearnSuppression(packet, message, event)
+            }
+            handleMidiMappingEditorEvent(event, cancellationRequested = false)
+        }
+        return transition.inputConsumed
+    }
+
+    private fun armMidiLearnSuppression(
+        packet: MidiInputPacket,
+        message: MidiMessage,
+        event: MidiMappingEditorEvent.CandidateCaptured,
+    ) {
+        val key = midiLearnSuppressionKey(packet, message) ?: return
+        when (message) {
+            is MidiMessage.NoteOn -> {
+                midiLearnSuppressionLeases[key] = MidiLearnSuppressionLease(key)
+                midiLearnCandidateSuppressionKey = key
+            }
+            is MidiMessage.ControlChange -> {
+                val threshold = event.candidate.binding.ccThreshold
+                    ?: dev.intervaltablet.domain.MIDI_MAPPING_DEFAULT_CC_THRESHOLD
+                if (message.value >= threshold) {
+                    midiLearnSuppressionLeases[key] = MidiLearnSuppressionLease(
+                        key = key,
+                        ccThreshold = threshold,
+                    )
+                    midiLearnCandidateSuppressionKey = key
+                } else {
+                    midiLearnSuppressionLeases.remove(key)
+                    if (midiLearnCandidateSuppressionKey == key) {
+                        midiLearnCandidateSuppressionKey = null
+                    }
+                }
+            }
+            else -> Unit
+        }
+    }
+
+    private fun consumeMidiLearnSuppression(
+        packet: MidiInputPacket,
+        message: MidiMessage,
+    ): Boolean {
+        val key = midiLearnSuppressionKey(packet, message) ?: return false
+        val lease = midiLearnSuppressionLeases[key] ?: return false
+        when (message) {
+            is MidiMessage.NoteOff -> {
+                midiLearnSuppressionLeases.remove(key)
+                if (midiLearnCandidateSuppressionKey == key) {
+                    midiLearnCandidateSuppressionKey = null
+                }
+            }
+            is MidiMessage.ControlChange -> {
+                if (message.value < requireNotNull(lease.ccThreshold)) {
+                    midiLearnSuppressionLeases.remove(key)
+                    if (midiLearnCandidateSuppressionKey == key) {
+                        midiLearnCandidateSuppressionKey = null
+                    }
+                }
+            }
+            is MidiMessage.NoteOn -> Unit
+            else -> return false
+        }
+        return true
+    }
+
+    private fun midiLearnSuppressionKey(
+        packet: MidiInputPacket,
+        message: MidiMessage,
+    ): MidiLearnSuppressionKey? {
+        val channel: Int
+        val kind: MidiBindingKey.Kind
+        val number: Int
+        when (message) {
+            is MidiMessage.NoteOn -> {
+                channel = message.channel
+                kind = MidiBindingKey.Kind.NOTE
+                number = message.note
+            }
+            is MidiMessage.NoteOff -> {
+                channel = message.channel
+                kind = MidiBindingKey.Kind.NOTE
+                number = message.note
+            }
+            is MidiMessage.ControlChange -> {
+                channel = message.channel
+                kind = MidiBindingKey.Kind.CC
+                number = message.controller
+            }
+            else -> return null
+        }
+        return MidiLearnSuppressionKey(
+            deviceId = packet.source.deviceId,
+            portNumber = packet.source.portNumber,
+            channel = channel,
+            kind = kind,
+            number = number,
+        )
+    }
+
+    private fun clearMidiLearnSuppressions() {
+        midiLearnSuppressionLeases.clear()
+        midiLearnCandidateSuppressionKey = null
+    }
+
+    private fun updateMidiLearnSuppressionThreshold(threshold: Int) {
+        val key = midiLearnCandidateSuppressionKey ?: return
+        val lease = midiLearnSuppressionLeases[key] ?: return
+        if (key.kind != MidiBindingKey.Kind.CC) return
+        midiLearnSuppressionLeases[key] = lease.copy(ccThreshold = threshold)
+    }
+
     private fun handleMidiState(incoming: MidiRepositoryState) {
         val previous = midiState
         // Operational state and sampled counters are produced independently. Never let an older
@@ -826,6 +1299,8 @@ class IntervalTabletViewModel @JvmOverloads constructor(
         if (previousSource.phase == MidiConnectionPhase.OPEN &&
             !state.sourceConnection.continues(previousSource)
         ) {
+            closeMidiMappingEditor()
+            clearMidiLearnSuppressions()
             previousSource.descriptor?.let { descriptor ->
                 applyPerformanceCommand(
                     PerformanceCommand.PurgeSource(
@@ -837,6 +1312,8 @@ class IntervalTabletViewModel @JvmOverloads constructor(
             }
             connectionParser.resetConnection()
         } else if (!state.sourceConnection.sameIdentity(previousSource)) {
+            closeMidiMappingEditor()
+            clearMidiLearnSuppressions()
             connectionParser.resetConnection()
         }
 
@@ -1057,6 +1534,8 @@ class IntervalTabletViewModel @JvmOverloads constructor(
             return
         }
 
+        closeMidiMappingEditor()
+        clearMidiLearnSuppressions()
         connection.descriptor?.let { current ->
             applyPerformanceCommand(
                 PerformanceCommand.PurgeSource(current.deviceId, current.portNumber, clock.nowNanos()),
@@ -1118,6 +1597,8 @@ class IntervalTabletViewModel @JvmOverloads constructor(
                 scaleId = config.scale.id,
                 chordId = config.chord.id,
                 padArticulation = config.padArticulation,
+                arpeggiator = config.arpeggiator,
+                forceToScale = config.forceToScale,
                 rangeMin = config.range.min,
                 rangeMax = config.range.max,
                 solfegeWrap = config.solfegeWrap,
@@ -1141,6 +1622,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
         slot: Int?,
         timestampNanos: Long,
     ) {
+        closeMidiMappingEditor()
         applyPerformanceCommand(PerformanceCommand.Panic(timestampNanos))
         val destination = performanceState.currentDestination
         val context = preset.musicalContext
@@ -1153,6 +1635,8 @@ class IntervalTabletViewModel @JvmOverloads constructor(
                 outputChannel = preset.routing.outputChannel,
                 chord = ChordLibrary.byId(context.chordId),
                 padArticulation = context.padArticulation,
+                arpeggiator = context.arpeggiator,
+                forceToScale = context.forceToScale,
             )
         }.getOrElse {
             InstrumentConfig(
@@ -1161,6 +1645,8 @@ class IntervalTabletViewModel @JvmOverloads constructor(
                 outputChannel = preset.routing.outputChannel,
                 chord = ChordLibrary.byId(context.chordId),
                 padArticulation = context.padArticulation,
+                arpeggiator = context.arpeggiator,
+                forceToScale = context.forceToScale,
             )
         }
         performanceState = PerformanceCoordinatorState.initial(config).copy(
@@ -1173,6 +1659,14 @@ class IntervalTabletViewModel @JvmOverloads constructor(
             toneRow = preset.toneRow.toStoppedDomainState(),
             transport = preset.transport.toStoppedDomainState(),
         )
+        if (settingsLoaded) {
+            handleSynthPatch(
+                synthPatch.withParameter(
+                    SynthParameter.TEMPO_BPM,
+                    performanceState.transport.tempoBpm.toFloat(),
+                ),
+            )
+        }
         preferredSourceIdentity = preset.routing.preferredSourceIdentity
         preferredDestinationIdentity = preset.routing.preferredDestinationIdentity
         selectedPresetSlot = slot?.coerceIn(0, PRESET_SLOT_COUNT - 1) ?: selectedPresetSlot
@@ -1191,6 +1685,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
                 scaleId = stored.scaleId,
                 chordId = stored.chordId,
                 padArticulation = stored.padArticulation,
+                forceToScale = stored.forceToScale,
                 rangeMin = stored.rangeMin,
                 rangeMax = stored.rangeMax,
                 solfegeWrap = stored.solfegeWrap,
@@ -1212,7 +1707,10 @@ class IntervalTabletViewModel @JvmOverloads constructor(
             timestampNanos = clock.nowNanos().coerceAtLeast(0L),
         )
         audioMonitorEnabled = stored.audioMonitorEnabled
-        synthPatch = stored.synthPatch
+        synthPatch = stored.synthPatch.withParameter(
+            SynthParameter.TEMPO_BPM,
+            performanceState.transport.tempoBpm.toFloat(),
+        )
         performanceLock = stored.performanceLock
         settingsLoaded = true
         advanceAudioLifecycleGeneration()
@@ -1254,6 +1752,16 @@ class IntervalTabletViewModel @JvmOverloads constructor(
             stopAudioAfterParameterFailure()
         }
         if (patchChanged) markPersistenceDirty()
+    }
+
+    private fun applyTempo(bpm: Int) {
+        val bounded = bpm.coerceIn(20, 300)
+        applyPerformanceCommand(
+            PerformanceCommand.Transport(TransportAction.SetTempo(bounded)),
+        )
+        handleSynthPatch(
+            synthPatch.withParameter(SynthParameter.TEMPO_BPM, bounded.toFloat()),
+        )
     }
 
     private fun handleSynthPatchPreview(patch: SynthPatch) {
@@ -1302,6 +1810,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
     }
 
     private fun handleHostStopped() {
+        closeMidiMappingEditor()
         if (!hostStarted) return
         advanceAudioLifecycleGeneration()
         previewedSynthPatch = null
@@ -1341,6 +1850,16 @@ class IntervalTabletViewModel @JvmOverloads constructor(
     }
 
     private fun applyPerformanceCommand(command: PerformanceCommand) {
+        if (command is PerformanceCommand.Panic) clearMidiLearnSuppressions()
+        val instrumentAction = (command as? PerformanceCommand.Instrument)?.action
+        if (
+            instrumentAction is InstrumentAction.SetScale ||
+            instrumentAction is InstrumentAction.SetChord ||
+            instrumentAction is InstrumentAction.SetArpeggiatorConfig
+        ) {
+            scheduledArpeggioGates.values.forEach { it.job.cancel() }
+            scheduledArpeggioGates.clear()
+        }
         val previous = performanceState
         val mayMutatePersistence = command.mayMutatePersistableContent(previous)
         runCatching { coordinator.reduce(performanceState, command) }
@@ -1363,7 +1882,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
             is PerformanceEffect.Audio -> dispatchAudioEffect(effect)
             is PerformanceEffect.ReleaseAt -> {
                 toneRowReleaseJob?.cancel()
-                toneRowReleaseJob = viewModelScope.launch(actorDispatcher) {
+                toneRowReleaseJob = viewModelScope.launch(musicalActorDispatcher) {
                     val remainingNanos = effect.timestampNanos - clock.nowNanos()
                     if (remainingNanos > 0L) {
                         delay(ceilNanosToMillis(remainingNanos))
@@ -1505,6 +2024,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
             scaleId = config.scale.id,
             chordId = config.chord.id,
             padArticulation = config.padArticulation,
+            forceToScale = config.forceToScale,
             passThroughMode = performance.router.mode,
             rangeMin = config.range.min,
             rangeMax = config.range.max,
@@ -1537,6 +2057,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
     private fun publish() {
         mutableUiState.value = AppUiState(
             performance = performanceState,
+            midiMappingEditor = midiMappingEditorState,
             midi = midiState,
             audioMonitorEnabled = audioMonitorEnabled,
             audioAvailable = audioEngine.isAvailable,
@@ -1557,10 +2078,15 @@ class IntervalTabletViewModel @JvmOverloads constructor(
         closing.set(true)
         mailbox.close()
         synchronized(actorGuard) {
+            closeMidiMappingEditor()
             internalClockJob?.cancel()
             internalClockJob = null
             toneRowReleaseJob?.cancel()
             toneRowReleaseJob = null
+            scheduledArpeggios.values.forEach { it.job.cancel() }
+            scheduledArpeggios.clear()
+            scheduledArpeggioGates.values.forEach { it.job.cancel() }
+            scheduledArpeggioGates.clear()
             val transition = coordinator.reduce(performanceState, PerformanceCommand.Panic(clock.nowNanos()))
             performanceState = transition.state
             transition.effects.forEach { effect ->
@@ -1587,6 +2113,7 @@ class IntervalTabletViewModel @JvmOverloads constructor(
         midiRepository.close()
         audioEngine.close()
         super.onCleared()
+        ownedActorDispatcher?.close()
     }
 
     private sealed interface MailboxCommand {
@@ -1609,6 +2136,9 @@ class IntervalTabletViewModel @JvmOverloads constructor(
         ) : MailboxCommand
 
         data class MidiPacketReceived(val packet: MidiInputPacket) : MailboxCommand
+        data class MidiMappingEditorActionReceived(
+            val action: MidiMappingEditorAction,
+        ) : MailboxCommand
         data class MidiStateChanged(val state: MidiRepositoryState) : MailboxCommand
         data class MidiEventReceived(val event: MidiRepositoryEvent) : MailboxCommand
         data class ApplyStoredSettings(val settings: StoredSettings) : MailboxCommand
@@ -1625,6 +2155,17 @@ class IntervalTabletViewModel @JvmOverloads constructor(
             val generation: Long,
             val dueNanos: Long,
         ) : MailboxCommand
+        data class ArpeggioDue(
+            val source: TriggerSource,
+            val generation: Long,
+            val dueNanos: Long,
+        ) : MailboxCommand
+        data class ArpeggioGateDue(
+            val source: TriggerSource,
+            val generation: Long,
+            val dueNanos: Long,
+        ) : MailboxCommand
+        data class SetTempo(val bpm: Int) : MailboxCommand
         data class RecoverFromOverflow(val timestampNanos: Long) : MailboxCommand
         data class PersistenceFailed(
             val version: Long,
@@ -1641,6 +2182,9 @@ class IntervalTabletViewModel @JvmOverloads constructor(
         ) : MailboxCommand
         data class SetSynthPatch(val patch: SynthPatch) : MailboxCommand
         data class PreviewSynthPatch(val patch: SynthPatch) : MailboxCommand
+        data object OpenMidiMappingEditor : MailboxCommand
+        data object SaveMidiMappingEditor : MailboxCommand
+        data object ResetMidiMapping : MailboxCommand
         data object ToggleAudioEnabled : MailboxCommand
         data object TogglePerformanceLock : MailboxCommand
         data object HostStarted : MailboxCommand
@@ -1691,21 +2235,35 @@ private fun PerformanceCommand.mayMutatePersistableContent(
             is InstrumentAction.SetWrap,
             is InstrumentAction.SetChord,
             is InstrumentAction.SetPadArticulation,
+            is InstrumentAction.SetArpeggiatorConfig,
+            is InstrumentAction.SetForceToScale,
             is InstrumentAction.SetOutputChannel,
             -> true
-            is InstrumentAction.PressInterval -> state.toneRow.mode == ToneRowMode.RECORDING ||
-                state.toneRow.mode == ToneRowMode.MANUAL_PLAYBACK
+            is InstrumentAction.PressInterval -> state.toneRow.mode in setOf(
+                ToneRowMode.RECORDING,
+                ToneRowMode.MANUAL_PLAYBACK,
+                ToneRowMode.PAUSED,
+            )
+            is InstrumentAction.PressSameInterval -> state.toneRow.mode in setOf(
+                ToneRowMode.MANUAL_PLAYBACK,
+                ToneRowMode.PAUSED,
+            )
             is InstrumentAction.Undo -> state.toneRow.mode in setOf(
                 ToneRowMode.MANUAL_PLAYBACK,
                 ToneRowMode.AUTO_PLAYING,
                 ToneRowMode.PAUSED,
             )
             is InstrumentAction.PressChromatic,
+            is InstrumentAction.PressSamePitch,
+            is InstrumentAction.PressRandomInterval,
+            is InstrumentAction.HoldChromaticShift,
             is InstrumentAction.PressAbsolute,
             is InstrumentAction.PressPadAbsolute,
             is InstrumentAction.StrumTone,
             is InstrumentAction.UndoThenMove,
             is InstrumentAction.Release,
+            is InstrumentAction.AdvanceArpeggio,
+            is InstrumentAction.ReleaseArpeggioVoice,
             is InstrumentAction.Home,
             is InstrumentAction.AnchorExternal,
             is InstrumentAction.Panic,
@@ -1736,6 +2294,8 @@ private fun PerformanceCoordinatorState.hasSamePersistableContent(
         leftConfig.scale.id != rightConfig.scale.id ||
         leftConfig.chord.id != rightConfig.chord.id ||
         leftConfig.padArticulation != rightConfig.padArticulation ||
+        leftConfig.arpeggiator != rightConfig.arpeggiator ||
+        leftConfig.forceToScale != rightConfig.forceToScale ||
         leftConfig.range != rightConfig.range ||
         leftConfig.solfegeWrap != rightConfig.solfegeWrap ||
         leftConfig.outputChannel != rightConfig.outputChannel ||
@@ -1768,7 +2328,8 @@ private fun PerformanceCoordinatorState.hasSamePersistableContent(
     return leftTransport.clockSource == rightTransport.clockSource &&
         leftTransport.clocksPerStep == rightTransport.clocksPerStep &&
         leftTransport.tempoBpm == rightTransport.tempoBpm &&
-        leftTransport.noteDurationPercent == rightTransport.noteDurationPercent
+        leftTransport.noteDurationPercent == rightTransport.noteDurationPercent &&
+        leftTransport.timeSignature == rightTransport.timeSignature
 }
 
 private fun MidiRepositoryState.operationalKey(): MidiOperationalKey {
@@ -1823,6 +2384,16 @@ private fun ceilNanosToMillis(nanos: Long): Long {
 
 private fun nextSequence(value: Long): Long {
     return if (value == Long.MAX_VALUE) Long.MAX_VALUE else value + 1L
+}
+
+private fun safeAddNanos(timestampNanos: Long, durationNanos: Long): Long {
+    require(timestampNanos >= 0L)
+    require(durationNanos >= 0L)
+    return if (timestampNanos > Long.MAX_VALUE - durationNanos) {
+        Long.MAX_VALUE
+    } else {
+        timestampNanos + durationNanos
+    }
 }
 
 private fun MidiRepositoryState.connection(direction: MidiPortDirection): dev.intervaltablet.midi.MidiConnectionState {

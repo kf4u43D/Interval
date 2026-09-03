@@ -67,6 +67,8 @@ class ToneRowReducerTest {
             playMode = ToneRowPlayMode.RETRO,
             intervalSequence = listOf(2, -1),
             translation = 3,
+            notesPlayedInCycle = 4,
+            lastManualSteps = -3,
         )
         val changedGrid = PitchGrid(5, ScaleLibrary.minorPentatonic, MidiNoteRange(48, 84), wrap = true)
         val transition = ToneRowReducer(changedGrid).reduce(previous, ToneRowAction.StartRecording(70))
@@ -79,6 +81,8 @@ class ToneRowReducerTest {
         assertEquals(ToneRowPlayMode.RETRO, transition.state.playMode)
         assertEquals(listOf(2, -1), transition.state.intervalSequence)
         assertEquals(3, transition.state.translation)
+        assertEquals(0, transition.state.notesPlayedInCycle)
+        assertEquals(0, transition.state.lastManualSteps)
     }
 
     @Test
@@ -96,6 +100,28 @@ class ToneRowReducerTest {
         assertEquals(1, early.state.entries.size)
         assertEquals(0, early.state.rowIndex)
         assertTrue(early.events.isEmpty())
+    }
+
+    @Test
+    fun cancelRecordingAbandonsAPartialTakeAndIsANoOpOutsideRecording() {
+        var recording = reducer.reduce(ToneRowState(), ToneRowAction.StartRecording(60)).state
+        recording = reducer.reduce(recording, ToneRowAction.RecordMove(1, 81)).state
+        recording = reducer.reduce(recording, ToneRowAction.RecordMove(1, 82)).state
+
+        val cancelled = reducer.reduce(recording, ToneRowAction.CancelRecording)
+
+        assertEquals(ToneRowMode.IDLE, cancelled.state.mode)
+        assertTrue(cancelled.state.entries.isEmpty())
+        assertEquals(null, cancelled.state.currentRecordNote)
+        assertEquals(0, cancelled.state.recordingCapacity)
+        assertEquals(0, cancelled.state.rowIndex)
+        assertEquals(0, cancelled.state.sequenceIndex)
+        assertEquals(0, cancelled.state.notesPlayedInCycle)
+        assertEquals(0, cancelled.state.lastManualSteps)
+        assertTrue(cancelled.events.isEmpty())
+
+        val manual = rowState(5).copy(mode = ToneRowMode.MANUAL_PLAYBACK)
+        assertEquals(manual, reducer.reduce(manual, ToneRowAction.CancelRecording).state)
     }
 
     @Test
@@ -142,11 +168,43 @@ class ToneRowReducerTest {
     }
 
     @Test
+    fun pausedManualMovesRetainPauseOverrideVelocityAndCanRepeatTheLastMovement() {
+        val paused = rowState(5).copy(
+            mode = ToneRowMode.PAUSED,
+            rowIndex = 1,
+            notesPlayedInCycle = 2,
+            lastManualSteps = -1,
+        )
+
+        val moved = reducer.reduce(paused, ToneRowAction.ManualMove(2, velocityOverride = 121))
+        assertEquals(ToneRowMode.PAUSED, moved.state.mode)
+        assertEquals(3, moved.state.rowIndex)
+        assertEquals(2, moved.state.notesPlayedInCycle)
+        assertEquals(2, moved.state.lastManualSteps)
+        assertEquals(121, moved.playedVelocity())
+        assertEquals(paused.entries[3].velocity, moved.state.entries[3].velocity)
+
+        val repeated = reducer.reduce(
+            moved.state,
+            ToneRowAction.RepeatLastManualMove(velocityOverride = 99),
+        )
+        assertEquals(ToneRowMode.PAUSED, repeated.state.mode)
+        assertEquals(0, repeated.state.rowIndex)
+        assertEquals(2, repeated.state.lastManualSteps)
+        assertEquals(99, repeated.playedVelocity())
+
+        val storedVelocity = reducer.reduce(repeated.state, ToneRowAction.ManualMove(1))
+        assertEquals(repeated.state.entries[1].velocity, storedVelocity.playedVelocity())
+    }
+
+    @Test
     fun manualMovesAreIgnoredOutsideManualPlayback() {
         val idle = rowState(5)
         val auto = idle.copy(mode = ToneRowMode.AUTO_PLAYING)
         assertEquals(idle, reducer.reduce(idle, ToneRowAction.ManualMove(1)).state)
         assertEquals(auto, reducer.reduce(auto, ToneRowAction.ManualMove(1)).state)
+        assertEquals(idle, reducer.reduce(idle, ToneRowAction.RepeatLastManualMove()).state)
+        assertEquals(auto, reducer.reduce(auto, ToneRowAction.RepeatLastManualMove()).state)
     }
 
     @Test
@@ -202,8 +260,17 @@ class ToneRowReducerTest {
     }
 
     @Test
-    fun randomModeIsSeedDeterministicAndConsumesItsExplicitState() {
-        val initial = rowState(7).copy(playMode = ToneRowPlayMode.RANDOM, randomState = 1234L)
+    fun randomModeStartsAtTheFirstEntryAndIsSeedDeterministic() {
+        val initial = rowState(7).copy(
+            playMode = ToneRowPlayMode.RANDOM,
+            intervalSequence = listOf(2),
+            randomState = 1234L,
+        )
+        val started = reducer.reduce(initial, ToneRowAction.StartAuto())
+        assertEquals(0, started.state.rowIndex)
+        assertEquals(noteAt(initial, 0), started.playedNote())
+        assertEquals(initial.randomState, started.state.randomState)
+
         val first = emittedTransitions(initial, 20)
         val second = emittedTransitions(initial, 20)
         assertEquals(first, second)
@@ -215,12 +282,144 @@ class ToneRowReducerTest {
     }
 
     @Test
+    fun randomModePreservesRequestedSignAndUsesZeroToTwiceItsMagnitude() {
+        repeat(128) { seed ->
+            val positive = rowState(7).copy(
+                mode = ToneRowMode.AUTO_PLAYING,
+                rowIndex = 1,
+                intervalSequence = listOf(2),
+                playMode = ToneRowPlayMode.RANDOM,
+                randomState = seed.toLong(),
+            )
+            val positiveTick = reducer.reduce(positive, ToneRowAction.Tick)
+            assertTrue("seed=$seed", positiveTick.state.rowIndex in 1..5)
+
+            val negative = positive.copy(rowIndex = 5, intervalSequence = listOf(-2))
+            val negativeTick = reducer.reduce(negative, ToneRowAction.Tick)
+            assertTrue("seed=$seed", negativeTick.state.rowIndex in 1..5)
+        }
+
+        val zero = rowState(7).copy(
+            mode = ToneRowMode.AUTO_PLAYING,
+            rowIndex = 3,
+            intervalSequence = listOf(0),
+            playMode = ToneRowPlayMode.RANDOM,
+            randomState = 42L,
+        )
+        val zeroTick = reducer.reduce(zero, ToneRowAction.Tick)
+        assertEquals(3, zeroTick.state.rowIndex)
+        assertNotEquals(zero.randomState, zeroTick.state.randomState)
+    }
+
+    @Test
     fun pendulumDoesNotRepeatEitherEndpoint() {
         val initial = rowState(5).copy(playMode = ToneRowPlayMode.PENDULUM)
         val transitions = emittedTransitions(initial, 10)
         assertEquals(listOf(0, 1, 2, 3, 4, 3, 2, 1, 0, 1), transitions.map { it.state.rowIndex })
         val indices = transitions.map { it.state.rowIndex }
         assertFalse(indices.zipWithNext().any { (left, right) -> left == right && left in listOf(0, 4) })
+    }
+
+    @Test
+    fun automaticTransformModesAdvanceOnceAfterEachCompleteLogicalCycle() {
+        data class Fixture(
+            val mode: ToneRowPlayMode,
+            val expectedTransposition: Int,
+            val expectedTranslation: Int,
+        )
+        val fixtures = listOf(
+            Fixture(ToneRowPlayMode.AUTO_TRANSPOSE_UP, 1, 0),
+            Fixture(ToneRowPlayMode.AUTO_TRANSPOSE_DOWN, -1, 0),
+            Fixture(ToneRowPlayMode.AUTO_TRANSLATE_UP, 0, 1),
+            Fixture(ToneRowPlayMode.AUTO_TRANSLATE_DOWN, 0, -1),
+        )
+
+        fixtures.forEach { fixture ->
+            val initial = rowState(3).copy(playMode = fixture.mode)
+            val first = reducer.reduce(initial, ToneRowAction.StartAuto())
+            assertEquals("mode=${fixture.mode}", 0, first.state.rowIndex)
+            assertEquals("mode=${fixture.mode}", 1, first.state.notesPlayedInCycle)
+            assertEquals("mode=${fixture.mode}", 0, first.state.transpositionSemitones)
+            assertEquals("mode=${fixture.mode}", 0, first.state.translation)
+
+            val second = reducer.reduce(first.state, ToneRowAction.Tick)
+            assertEquals("mode=${fixture.mode}", 2, second.state.notesPlayedInCycle)
+            val cycleEnd = reducer.reduce(second.state, ToneRowAction.Tick)
+            assertEquals("mode=${fixture.mode}", 0, cycleEnd.state.notesPlayedInCycle)
+            assertEquals(
+                "mode=${fixture.mode}",
+                fixture.expectedTransposition,
+                cycleEnd.state.transpositionSemitones,
+            )
+            assertEquals("mode=${fixture.mode}", fixture.expectedTranslation, cycleEnd.state.translation)
+
+            val nextCycle = reducer.reduce(cycleEnd.state, ToneRowAction.Tick)
+            val expectedDegree = initial.entries.first().relativeDegree + fixture.expectedTranslation
+            val expectedNote = (
+                grid.noteFromRelativeDegree(expectedDegree) + fixture.expectedTransposition
+                ).coerceIn(grid.range.min, grid.range.max)
+            assertEquals("mode=${fixture.mode}", expectedNote, nextCycle.playedNote())
+            assertEquals("mode=${fixture.mode}", 1, nextCycle.state.notesPlayedInCycle)
+        }
+    }
+
+    @Test
+    fun restartClearsOnlyTheAccumulatedOffsetOfAutomaticTransformModes() {
+        data class Fixture(
+            val mode: ToneRowPlayMode,
+            val expectedTransposition: Int,
+            val expectedTranslation: Int,
+        )
+        val fixtures = listOf(
+            Fixture(ToneRowPlayMode.AUTO_TRANSPOSE_UP, 0, 5),
+            Fixture(ToneRowPlayMode.AUTO_TRANSPOSE_DOWN, 0, 5),
+            Fixture(ToneRowPlayMode.AUTO_TRANSLATE_UP, 7, 0),
+            Fixture(ToneRowPlayMode.AUTO_TRANSLATE_DOWN, 7, 0),
+        )
+
+        fixtures.forEach { fixture ->
+            val accumulated = rowState(3).copy(
+                mode = ToneRowMode.AUTO_PLAYING,
+                playMode = fixture.mode,
+                rowIndex = 2,
+                transpositionSemitones = 7,
+                translation = 5,
+                notesPlayedInCycle = 2,
+            )
+
+            val restarted = reducer.reduce(accumulated, ToneRowAction.Restart)
+
+            assertEquals("mode=${fixture.mode}", 0, restarted.state.rowIndex)
+            assertEquals("mode=${fixture.mode}", 1, restarted.state.notesPlayedInCycle)
+            assertEquals(
+                "mode=${fixture.mode}",
+                fixture.expectedTransposition,
+                restarted.state.transpositionSemitones,
+            )
+            assertEquals(
+                "mode=${fixture.mode}",
+                fixture.expectedTranslation,
+                restarted.state.translation,
+            )
+        }
+    }
+
+    @Test
+    fun automaticTransformationsSaturateAtTheirValidatedBounds() {
+        val transposed = rowState(1).copy(
+            playMode = ToneRowPlayMode.AUTO_TRANSPOSE_UP,
+            transpositionSemitones = 127,
+        )
+        assertEquals(
+            127,
+            reducer.reduce(transposed, ToneRowAction.StartAuto()).state.transpositionSemitones,
+        )
+
+        val translated = rowState(1).copy(
+            playMode = ToneRowPlayMode.AUTO_TRANSLATE_DOWN,
+            translation = -127,
+        )
+        assertEquals(-127, reducer.reduce(translated, ToneRowAction.StartAuto()).state.translation)
     }
 
     @Test
@@ -267,6 +466,8 @@ class ToneRowReducerTest {
             intervalSequence = listOf(2, -1),
             sequenceIndex = 1,
             pendulumDirection = -1,
+            notesPlayedInCycle = 4,
+            lastManualSteps = -3,
         )
         val reset = reducer.reduce(transformed, ToneRowAction.ResetTransformations).state
         assertEquals(entries, reset.entries)
@@ -278,6 +479,8 @@ class ToneRowReducerTest {
         assertEquals(listOf(1), reset.intervalSequence)
         assertEquals(0, reset.sequenceIndex)
         assertEquals(1, reset.pendulumDirection)
+        assertEquals(0, reset.notesPlayedInCycle)
+        assertEquals(0, reset.lastManualSteps)
     }
 
     @Test
@@ -323,6 +526,19 @@ class ToneRowReducerTest {
             assertEquals(ToneRowMode.MANUAL_PLAYBACK, transition.state.mode)
             assertFalse(transition.state.playOnce)
             assertEquals(0, transition.state.notesRemainingInPass)
+            assertEquals(0, transition.state.notesPlayedInCycle)
+            val expectedTransposition = when (mode) {
+                ToneRowPlayMode.AUTO_TRANSPOSE_UP -> 1
+                ToneRowPlayMode.AUTO_TRANSPOSE_DOWN -> -1
+                else -> 0
+            }
+            val expectedTranslation = when (mode) {
+                ToneRowPlayMode.AUTO_TRANSLATE_UP -> 1
+                ToneRowPlayMode.AUTO_TRANSLATE_DOWN -> -1
+                else -> 0
+            }
+            assertEquals("mode=$mode", expectedTransposition, transition.state.transpositionSemitones)
+            assertEquals("mode=$mode", expectedTranslation, transition.state.translation)
         }
     }
 
@@ -340,24 +556,35 @@ class ToneRowReducerTest {
         val advanced = reducer.reduce(started.state, ToneRowAction.Tick)
         val paused = reducer.reduce(advanced.state, ToneRowAction.PauseToggle)
         assertEquals(ToneRowMode.PAUSED, paused.state.mode)
+        assertEquals(2, paused.state.notesPlayedInCycle)
         assertTrue(reducer.reduce(paused.state, ToneRowAction.Tick).events.isEmpty())
 
         val resumed = reducer.reduce(paused.state, ToneRowAction.PauseToggle)
         assertEquals(ToneRowMode.AUTO_PLAYING, resumed.state.mode)
         assertEquals(advanced.state.rowIndex, resumed.state.rowIndex)
+        assertEquals(2, resumed.state.notesPlayedInCycle)
         assertEquals(advanced.state.rowIndex + 1, reducer.reduce(resumed.state, ToneRowAction.Tick).state.rowIndex)
     }
 
     @Test
     fun continuousAutoCanRestartOrContinueFromRetainedPosition() {
-        val stopped = rowState(5).copy(mode = ToneRowMode.IDLE, rowIndex = 3, sequenceIndex = 0)
+        val stopped = rowState(5).copy(
+            mode = ToneRowMode.IDLE,
+            rowIndex = 3,
+            sequenceIndex = 0,
+            lastManualSteps = 3,
+        )
         val continued = reducer.reduce(stopped, ToneRowAction.StartAuto(restart = false))
         assertEquals(3, continued.state.rowIndex)
         assertEquals(noteAt(stopped, 3), continued.playedNote())
+        assertEquals(1, continued.state.notesPlayedInCycle)
+        assertEquals(3, continued.state.lastManualSteps)
 
         val restarted = reducer.reduce(continued.state, ToneRowAction.StartAuto(restart = true))
         assertEquals(0, restarted.state.rowIndex)
         assertEquals(noteAt(stopped, 0), restarted.playedNote())
+        assertEquals(1, restarted.state.notesPlayedInCycle)
+        assertEquals(0, restarted.state.lastManualSteps)
     }
 
     @Test
@@ -392,6 +619,18 @@ class ToneRowReducerTest {
         assertThrows(IllegalArgumentException::class.java) {
             ToneRowEntry(0, 128, 64)
         }
+        assertThrows(IllegalArgumentException::class.java) {
+            ToneRowState(entries = rowState(5).entries, notesPlayedInCycle = 5)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            ToneRowState(entries = rowState(5).entries, lastManualSteps = 15)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            ToneRowAction.ManualMove(1, velocityOverride = 0)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            ToneRowAction.RepeatLastManualMove(velocityOverride = 128)
+        }
     }
 
     @Test
@@ -404,6 +643,8 @@ class ToneRowReducerTest {
         assertEquals(ToneRowMode.AUTO_PLAYING, transition.state.mode)
         assertTrue(transition.state.playOnce)
         assertEquals(4, transition.state.notesRemainingInPass)
+        assertEquals(1, transition.state.notesPlayedInCycle)
+        assertEquals(0, transition.state.lastManualSteps)
         var emitted = transition.events.filterIsInstance<ToneRowEvent.PlayNote>().size
         var finished = transition.events.count { it == ToneRowEvent.FinishedPass }
         while (transition.state.mode == ToneRowMode.AUTO_PLAYING) {
@@ -413,6 +654,7 @@ class ToneRowReducerTest {
         }
         assertEquals(5, emitted)
         assertEquals(1, finished)
+        assertEquals(0, transition.state.notesPlayedInCycle)
     }
 
     @Test
@@ -470,4 +712,7 @@ class ToneRowReducerTest {
 
     private fun ToneRowTransition.playedNote(): Int =
         events.filterIsInstance<ToneRowEvent.PlayNote>().single().midiNote
+
+    private fun ToneRowTransition.playedVelocity(): Int =
+        events.filterIsInstance<ToneRowEvent.PlayNote>().single().velocity
 }

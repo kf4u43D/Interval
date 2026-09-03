@@ -1,0 +1,29 @@
+V2.1 Stage 5 - réception instrumentée finale
+Date: 2026-09-01
+Appareil: Samsung SM-X620 / Android API 36
+Application: dev.intervaltablet.instrumented / 0.2.1-dev-instrumented
+
+Commande:
+adb -s <serial-wifi> shell am instrument -w dev.intervaltablet.instrumented.test/androidx.test.runner.AndroidJUnitRunner
+
+Résultat:
+dev.intervaltablet.audio.NativeAudioEngineDeviceTest:.
+dev.intervaltablet.ui.IntervalPadAccessibilityTest:..
+dev.intervaltablet.ui.MidiMappingEditorAccessibilityTest:.
+dev.intervaltablet.ui.SynthPanelAccessibilityTest:..
+dev.intervaltablet.ui.ToneRowDeckLayoutTest:.
+
+Time: 17,279
+OK (7 tests)
+
+Nettoyage final:
+- package de test dev.intervaltablet.instrumented.test désinstallé avec succès ;
+- V1 dev.intervaltablet.debug conservée ;
+- V2.1 dev.intervaltablet.instrumented conservée et relancée.
+
+Portée:
+- couvre l'audio natif nominal, les cibles tactiles compactes, les dix variantes
+  d'accords visibles, Force to Scale, MIDI Learn, Tone Row et les contrôles Synthé ;
+- le test Synthé manipule le temps et le feedback du delay avant commit ;
+- ne remplace pas les validations USB MIDI, TalkBack, vrai multi-touch, loopback,
+  hotplug, écoute comparative, rendu soutenu à 90 Hz ou soak de 60 minutes.

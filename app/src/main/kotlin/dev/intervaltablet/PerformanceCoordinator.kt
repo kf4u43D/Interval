@@ -286,15 +286,22 @@ class PerformanceCoordinator(
         val transition = intervalReducer.reduce(state.instrument, action)
         val activeSteps = when (action) {
             is InstrumentAction.PressInterval -> state.activeStepsBySource + (action.source to action.steps)
+            is InstrumentAction.PressSameInterval -> state.activeStepsBySource +
+                (action.source to transition.state.lastIntervalSteps)
+            is InstrumentAction.PressRandomInterval -> state.activeStepsBySource +
+                (action.source to transition.state.lastIntervalSteps)
             is InstrumentAction.UndoThenMove -> state.activeStepsBySource + (action.source to action.steps)
             is InstrumentAction.Release -> state.activeStepsBySource - action.source
-            is InstrumentAction.SetScale,
             is InstrumentAction.SetRoot,
             is InstrumentAction.SetRange,
             is InstrumentAction.SetWrap,
             is InstrumentAction.SetOutputChannel,
             is InstrumentAction.Panic,
             -> emptyMap()
+            is InstrumentAction.SetScale,
+            is InstrumentAction.SetArpeggiatorConfig,
+            is InstrumentAction.ReleaseArpeggioVoice,
+            -> state.activeStepsBySource
             else -> state.activeStepsBySource
         }
         val effects = transition.events.map { output ->
@@ -371,10 +378,16 @@ class PerformanceCoordinator(
                     ),
                 )
             }
-            action is InstrumentAction.PressInterval && state.toneRow.mode == ToneRowMode.MANUAL_PLAYBACK -> {
+            action is InstrumentAction.PressInterval && state.toneRow.mode in setOf(
+                ToneRowMode.MANUAL_PLAYBACK,
+                ToneRowMode.PAUSED,
+            ) -> {
                 val applied = applyToneRowAction(
                     state = state,
-                    action = ToneRowAction.ManualMove(action.steps),
+                    action = ToneRowAction.ManualMove(
+                        steps = action.steps,
+                        velocityOverride = action.source.midiVelocityOverride(action.velocity),
+                    ),
                     timestampNanos = action.timestampNanos,
                     source = action.source,
                     synchronizeTransport = false,
@@ -383,6 +396,27 @@ class PerformanceCoordinator(
                 applied.copy(
                     state = applied.state.copy(
                         activeStepsBySource = applied.state.activeStepsBySource + (action.source to action.steps),
+                    ),
+                )
+            }
+            action is InstrumentAction.PressSameInterval && state.toneRow.mode in setOf(
+                ToneRowMode.MANUAL_PLAYBACK,
+                ToneRowMode.PAUSED,
+            ) -> {
+                val applied = applyToneRowAction(
+                    state = state,
+                    action = ToneRowAction.RepeatLastManualMove(
+                        velocityOverride = action.source.midiVelocityOverride(action.velocity),
+                    ),
+                    timestampNanos = action.timestampNanos,
+                    source = action.source,
+                    synchronizeTransport = false,
+                    destination = destination,
+                )
+                applied.copy(
+                    state = applied.state.copy(
+                        activeStepsBySource = applied.state.activeStepsBySource +
+                            (action.source to applied.state.toneRow.lastManualSteps),
                     ),
                 )
             }
@@ -412,7 +446,15 @@ class PerformanceCoordinator(
         synchronizeTransport: Boolean,
         destination: MidiDestinationId = state.currentDestination,
     ): PerformanceCoordinatorTransition {
-        val reduced = ToneRowReducer(state.instrument.config.grid()).reduce(state.toneRow, action)
+        val effectiveAction = if (
+            action is ToneRowAction.StartRecording &&
+            state.toneRow.mode == ToneRowMode.RECORDING
+        ) {
+            ToneRowAction.CancelRecording
+        } else {
+            action
+        }
+        val reduced = ToneRowReducer(state.instrument.config.grid()).reduce(state.toneRow, effectiveAction)
         var applied = applyToneRowEvents(
             state.copy(toneRow = reduced.state),
             reduced.events,
@@ -422,14 +464,19 @@ class PerformanceCoordinator(
         )
 
         if (synchronizeTransport) {
-            val transportAction = when (action) {
+            val transportAction = when (effectiveAction) {
                 is ToneRowAction.StartRecording,
                 ToneRowAction.FinishRecording,
+                ToneRowAction.CancelRecording,
                 ToneRowAction.Play,
                 ToneRowAction.Stop,
                 -> TransportAction.Stop(timestampNanos)
                 is ToneRowAction.StartAuto -> if (applied.state.toneRow.mode == ToneRowMode.AUTO_PLAYING) {
-                    if (action.restart) TransportAction.Start(timestampNanos) else TransportAction.Continue(timestampNanos)
+                    if (effectiveAction.restart) {
+                        TransportAction.Start(timestampNanos)
+                    } else {
+                        TransportAction.Continue(timestampNanos)
+                    }
                 } else {
                     null
                 }
@@ -474,9 +521,10 @@ class PerformanceCoordinator(
             )
         }
 
-        val shouldReleaseAutoVoice = reduced.events.none { it is ToneRowEvent.PlayNote } && when (action) {
+        val shouldReleaseAutoVoice = reduced.events.none { it is ToneRowEvent.PlayNote } && when (effectiveAction) {
             is ToneRowAction.StartRecording,
             ToneRowAction.FinishRecording,
+            ToneRowAction.CancelRecording,
             ToneRowAction.Play,
             ToneRowAction.Stop,
             ToneRowAction.PauseToggle,
@@ -649,11 +697,11 @@ class PerformanceCoordinator(
                 -> ToneRowAction.StartAuto(restart = true)
             }
             MidiAction.Stop -> ToneRowAction.Stop
-            MidiAction.Record -> ToneRowAction.StartRecording(state.instrument.currentNote)
-            MidiAction.Random -> ToneRowAction.SetPlayMode(dev.intervaltablet.domain.ToneRowPlayMode.RANDOM)
-            is MidiAction.ChromaticShift -> ToneRowAction.SetTransposition(
-                (state.toneRow.transpositionSemitones + action.semitones).coerceIn(-127, 127),
-            )
+            MidiAction.Record -> if (state.toneRow.mode == ToneRowMode.RECORDING) {
+                ToneRowAction.CancelRecording
+            } else {
+                ToneRowAction.StartRecording(state.instrument.currentNote)
+            }
             else -> return PerformanceCoordinatorTransition(state, emptyList())
         }
         return applyToneRowAction(
@@ -739,6 +787,7 @@ class PerformanceCoordinator(
             is TransportAction.SetTempo,
             is TransportAction.SetClocksPerStep,
             is TransportAction.SetNoteDuration,
+            is TransportAction.SetTimeSignature,
             -> 0L
         }
     }
@@ -754,11 +803,17 @@ class PerformanceCoordinator(
         return when (this) {
             is InstrumentAction.PressInterval -> timestampNanos
             is InstrumentAction.PressChromatic -> timestampNanos
+            is InstrumentAction.PressSameInterval -> timestampNanos
+            is InstrumentAction.PressSamePitch -> timestampNanos
+            is InstrumentAction.PressRandomInterval -> timestampNanos
+            is InstrumentAction.HoldChromaticShift -> timestampNanos
             is InstrumentAction.PressAbsolute -> timestampNanos
             is InstrumentAction.PressPadAbsolute -> timestampNanos
             is InstrumentAction.StrumTone -> timestampNanos
             is InstrumentAction.UndoThenMove -> timestampNanos
             is InstrumentAction.Release -> timestampNanos
+            is InstrumentAction.AdvanceArpeggio -> timestampNanos
+            is InstrumentAction.ReleaseArpeggioVoice -> timestampNanos
             is InstrumentAction.Undo -> timestampNanos
             is InstrumentAction.Home -> timestampNanos
             is InstrumentAction.AnchorExternal -> 0L
@@ -767,10 +822,16 @@ class PerformanceCoordinator(
             is InstrumentAction.SetRange -> timestampNanos
             is InstrumentAction.SetWrap -> timestampNanos
             is InstrumentAction.SetChord -> timestampNanos
+            is InstrumentAction.SetArpeggiatorConfig -> timestampNanos
             is InstrumentAction.SetPadArticulation -> timestampNanos
+            is InstrumentAction.SetForceToScale -> timestampNanos
             is InstrumentAction.SetOutputChannel -> timestampNanos
             is InstrumentAction.Panic -> timestampNanos
         }
+    }
+
+    private fun TriggerSource.midiVelocityOverride(velocity: Int): Int? {
+        return velocity.takeIf { this is TriggerSource.Midi }
     }
 
     private fun safeAdd(value: Long, increment: Long): Long {

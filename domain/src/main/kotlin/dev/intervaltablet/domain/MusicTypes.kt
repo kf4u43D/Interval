@@ -35,8 +35,13 @@ object ScaleLibrary {
     val chromatic = ScaleDefinition("chromatic", "Chromatic", (0..11).toList())
     val major = ScaleDefinition("major", "Major", listOf(0, 2, 4, 5, 7, 9, 11))
     val naturalMinor = ScaleDefinition("natural_minor", "Natural Minor", listOf(0, 2, 3, 5, 7, 8, 10))
+    val harmonicMinor = ScaleDefinition("harmonic_minor", "Harmonic Minor", listOf(0, 2, 3, 5, 7, 8, 11))
+    val melodicMinor = ScaleDefinition("melodic_minor", "Melodic Minor", listOf(0, 2, 3, 5, 7, 9, 11))
     val dorian = ScaleDefinition("dorian", "Dorian", listOf(0, 2, 3, 5, 7, 9, 10))
+    val phrygian = ScaleDefinition("phrygian", "Phrygian", listOf(0, 1, 3, 5, 7, 8, 10))
+    val lydian = ScaleDefinition("lydian", "Lydian", listOf(0, 2, 4, 6, 7, 9, 11))
     val mixolydian = ScaleDefinition("mixolydian", "Mixolydian", listOf(0, 2, 4, 5, 7, 9, 10))
+    val locrian = ScaleDefinition("locrian", "Locrian", listOf(0, 1, 3, 5, 6, 8, 10))
     val majorPentatonic = ScaleDefinition("major_pentatonic", "Major Pentatonic", listOf(0, 2, 4, 7, 9))
     val minorPentatonic = ScaleDefinition("minor_pentatonic", "Minor Pentatonic", listOf(0, 3, 5, 7, 10))
     val blues = ScaleDefinition("blues", "Blues", listOf(0, 3, 5, 6, 7, 10))
@@ -44,8 +49,13 @@ object ScaleLibrary {
     val all: List<ScaleDefinition> = listOf(
         major,
         naturalMinor,
+        harmonicMinor,
+        melodicMinor,
         dorian,
+        phrygian,
+        lydian,
         mixolydian,
+        locrian,
         majorPentatonic,
         minorPentatonic,
         blues,

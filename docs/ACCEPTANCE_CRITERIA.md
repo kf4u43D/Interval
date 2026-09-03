@@ -130,7 +130,7 @@ matériel ci-dessus.
 - [x] Les variantes `benchmark` minifiée/profileable et `instrumented` non minifiée sont
   séparées du package utilisateur et l'une de l'autre.
 
-### Gate logiciel courant acquis
+### Dernier gate logiciel MVP acquis — archive antérieure à la V2
 
 - [x] Le gate final du 1er septembre réussit 234/234 tests JVM (94 domaine et 140
   application), 2/2 tests natifs, les quatre analyses Lint et tous les assemblages ;
@@ -158,3 +158,164 @@ anti-saturation, la latence loopback, le soak de 60 minutes et le hotplug audio 
 recevoir ; les essais USB MIDI des portes 1 et 2 restent eux aussi ouverts. Ces protocoles
 exigent du matériel absent et restent décochés : le MVP logiciel est terminé, tandis que
 sa certification matérielle globale demeure partielle.
+
+## Porte 4 — V2 performance et MIDI Learn
+
+**Porte logicielle acceptée le 1er septembre 2026.** Le gate combiné vérifie le commit
+`13c2d7c4915e8da65c5e6898daf8ee9a5f253e75`. Les résultats MVP de la porte 3 ci-dessus
+restent une archive antérieure et ne sont pas additionnés aux chiffres V2.
+
+### Critères logiciels validés
+
+- [x] `Same Interval` répète le dernier déplacement diatonique et `Same Pitch` le dernier
+  écart chromatique réellement émis, avec les oracles `+3→Same` et D→E→F♯.
+- [x] Random Interval joue immédiatement un mouvement déterministe `-14…+14` sans changer
+  le mode Tone Row ; même graine et mêmes actions donnent la même sortie.
+- [x] Chromatic Shift est silencieux et momentané, s'additionne par source et disparaît
+  correctement sur Note Off, passage CC sous seuil, purge et Panic, sans Note Off perdu.
+- [x] Un second Record pendant l'enregistrement abandonne la prise et revient à `Idle`.
+- [x] La navigation manuelle reste possible en `Paused`, Continue repart de cette position
+  et la vélocité d'une Note MIDI n'affecte que l'émission courante.
+- [x] Tone Row expose Prime, Retro, Random, Pendulum, Auto-Transpose haut/bas et
+  Auto-Translate haut/bas ; Random conserve le signe dans `0…2×|pas|` et démarre au
+  premier élément.
+- [x] Les modes automatiques accumulent un demi-ton/degré par cycle logique ; Pause et
+  Continue conservent la phase, tandis que Restart/Reset restaurent l'accumulation neutre.
+- [x] Le reducer MIDI Learn pur couvre baseline, brouillon, armement, candidat, canal
+  reçu/Omni, seuil CC `1…127`, collision exacte, recouvrement Omni, suppression, reset,
+  Save, Cancel et baseline obsolète.
+- [x] Une capture Note On/CC est consommée avant politique de preset et routage : elle ne
+  joue pas, ne traverse pas et ne rappelle aucun preset.
+- [x] Armer provoque Panic ; Save installe/persiste une seule fois le mapping complet et
+  Cancel n'écrit rien. Lock, lifecycle, perte de source et overflow ferment sans conserver
+  de capture transitoire.
+- [x] Le panneau Compose dédié expose état d'attente, candidat, conflit/recouvrement,
+  actions Add/Replace/Delete/Reset/Save/Cancel et sémantiques accessibles.
+- [x] Mapping v1 reste lisible et les presets existants conservent leur mapping jusqu'à
+  une nouvelle sauvegarde explicite du slot.
+- [x] Toutes les suites des portes 1 à 3, Lint et les assemblages concernés repassent sans
+  régression : 131/131 domaine sur 11 suites et 160/160 application sur 19 suites, soit
+  291/291, plus CTest 2/2, quatre Lint sans issue et toutes les variantes demandées vertes.
+- [x] Le gate principal et `scripts/verify.ps1` réussissent avec contrôle des quatre ABI ;
+  les APK Debug, Release non signé, Benchmark, Instrumented et AndroidTest sont produits.
+
+### Réception et performance encore ouvertes
+
+- [x] Recevoir le panneau MIDI Learn sur SM-X620/API 36 sans périphérique USB : le test
+  direct final couvre conflit→Replace→Save puis Cancel dans une suite 7/7 en 15,603 s.
+- [ ] Exécuter MIDI Learn avec un contrôleur USB réel, canal exact puis Omni, Note et CC,
+  et vérifier par moniteur externe que le message capturé ne sort jamais.
+- [ ] Recevoir TalkBack, vrai multi-touch et les fermetures lifecycle/Performance Lock sur
+  la tablette cible.
+- [ ] Atteindre puis mesurer un rendu soutenu dans le budget de 11,11 ms à 90 Hz.
+- [ ] Terminer les protocoles USB MIDI, loopback/hotplug audio et soak de 60 minutes déjà
+  ouverts dans les portes précédentes.
+
+### Reports explicites
+
+Rest, Random Step et Ratchet, l'émission MIDI Clock/Start/Stop/Continue et Song Position
+Pointer, les actions mappées de gamme/clé/accord/preset, les CC relatifs/continus,
+profils/import-export et les bibliothèques/scopes étendus de gammes/presets ne sont pas
+des critères de la V2. Ratchet attend un scheduler de retrigger annulable par génération.
+CV, réseau, Scala, microtonalité, MPE et MIDI 2.0 restent hors périmètre.
+
+## Porte 5 — V2.1 surface de performance et Force to Scale
+
+### Critères logiciels
+
+- [x] La variante coinstallable porte le libellé « Interval Tablet V2 », le package
+  `dev.intervaltablet.instrumented` et la version `0.2.1-dev-instrumented` ; la V1
+  `dev.intervaltablet.debug` reste installée en `0.1.0-dev-debug`.
+- [x] Les neuf pads gardent des cibles tactiles d’au moins 48 dp et la scène portrait
+  plafonne leur hauteur pour rendre la réduction immédiatement visible.
+- [x] Les dix variantes d’accords sont affichées simultanément en deux rangées sur la
+  page de performance, sans ouvrir la Console.
+- [x] Treize gammes standards sont disponibles sur la scène et Force to Scale quantifie
+  les notes générées vers la note la plus proche, égalité vers le bas.
+- [x] PassThru reste inchangé, les notes tenues conservent leur release exacte et le
+  réglage est restauré par Settings v5, Preset v4 et banque v3.
+- [x] Le panneau Synthé expose séparément temps, feedback et mix du delay ; l’aperçu
+  continu et le commit de fin de geste utilisent le patch existant.
+- [x] Le gate complet domaine, natif, application, Lint, assemblages et structure passe
+  sans nouvel avertissement important.
+- [x] La suite instrumentée V2.1 finale passe sur SM-X620 et la tablette est nettoyée de
+  son package de test temporaire.
+
+Les périphériques USB MIDI réels, TalkBack, vrai multi-touch, 90 Hz soutenu, loopback,
+hotplug et soak audio restent des validations matérielles distinctes.
+
+## Porte 6 — V2.2 ergonomie deux mains et faible latence
+
+### Critères logiciels et tablette
+
+- [x] En portrait 900 × 1 440 dp, l’harmonie/les accords occupent le panneau gauche et
+  les neuf intervalles le panneau droit, plus large ; la disposition reste latérale en
+  paysage.
+- [x] Les dix accords, les neuf pads, toutes les articulations et les cordes visibles
+  conservent des cibles tactiles d’au moins 48 dp ; le strummer n’est plus comprimé à
+  22 dp et MIDI Learn reste accessible.
+- [x] La V2.2 de jeu utilise le package `dev.intervaltablet.performance`, la version
+  `0.2.2-dev-performance`, R8, le moteur natif Release et une compilation AOT `speed` ;
+  la V1 `dev.intervaltablet.debug` reste installée.
+- [x] L’acteur musical possède un thread mono-thread fermé avec le ViewModel et placé à
+  priorité Android audio, sans changer la machine d’état FIFO ni l’ownership des notes.
+- [x] Le gate réussit 136/136 tests domaine, 161/161 application, 8/8 instrumentés,
+  CTest 2/2, cinq Lint sans issue, tous les assemblages et le contrôle des quatre ABI.
+- [x] Sur le stress de 108 frappes, p90 est à 17 ms et les signaux `High input latency`
+  sont 12/121 ; le diagnostic audio reste à 48 kHz, burst 96, buffer 192, avec zéro xrun
+  et zéro événement perdu.
+- [x] Après réception, seules la dernière V1 et la V2.2 Performance restent installées ;
+  les APK/packages de test et fichiers XML temporaires sont retirés.
+
+Le scénario `gfxinfo` ne clôt pas la mesure loopback tactile/MIDI→audio. MIDI USB réel,
+TalkBack, vrai multi-touch, 90 Hz soutenu, hotplug et soak audio restent ouverts.
+
+## Porte 7 — V2.3 harmonie directe et arpège autonome
+
+### Critères logiciels et tablette
+
+- [x] Les treize gammes standards et les dix accords sont simultanément visibles dans le
+  panneau main gauche, en portrait et en paysage, sans menu intermédiaire.
+- [x] Gammes, accords et articulations répondent au front descendant tactile ; leurs
+  actions sémantiques clavier/accessibilité restent distinctes et ne doublent pas le geste.
+- [x] Changer d’accord revoicera immédiatement les pads maintenus, avec Note Off des
+  anciennes instances avant les nouveaux Note On au même timestamp.
+- [x] En mode Arpégé, maintenir un pad parcourt cycliquement toutes les voix disponibles
+  au tempo/division configurés, transport arrêté et Tone Row vide compris.
+- [x] Chaque arpège reste possédé par sa source ; Release, reconfiguration, Panic,
+  HostStop et `onCleared()` annulent sessions, notes et échéances tardives.
+- [x] Le gate réussit 138/138 tests domaine, 162/162 tests application, soit 300/300 JVM,
+  CTest 2/2, cinq Lint sans issue, tous les assemblages et le runtime natif quatre ABI.
+- [x] La suite SM-X620/API 36 réussit 8/8 en 28,464 s ; elle mesure les treize gammes,
+  dix accords, articulations, cordes et pads à au moins 48 dp et vérifie l’accord au down.
+- [x] La variante `dev.intervaltablet.performance` est installée en version
+  `0.2.3-dev-performance`, compilée ART `speed` et coinstallée avec la seule V1.
+
+Le MIDI USB réel, le vrai multi-touch, TalkBack, le loopback tactile/MIDI→audio, le rendu
+soutenu à 90 Hz, le hotplug et le soak audio restent des validations matérielles ouvertes.
+
+## Porte 8 — V2.4 surface workstation
+
+### Critères logiciels et tablette
+
+- [x] Un changement de gamme ou d'accord revoice les pads maintenus au même timestamp,
+  sans perdre leurs sessions ni leurs futures releases.
+- [x] La barre supérieure regroupe Home, Undo, Panic, Mute, BPM, signature et les pages
+  Interval, MIDI, Synthé et Arpégiateur ; aucune barre d'onglets inférieure ne subsiste.
+- [x] La page Interval sépare harmonie, strummer vertical trois octaves et intervalles ;
+  les neuf cordes mesurent au moins 48 dp dans la fenêtre instrumentée.
+- [x] La page MIDI contient états In/Out, routage, canaux, console et MIDI Learn.
+- [x] L'arpégiateur fonctionne sans Tone Row ni transport, avec ordre, 1–3 octaves,
+  motif huit pas et gate qui ne termine pas le geste.
+- [x] La page Synthé expose 28 paramètres DSP fonctionnels, deux ADSR, drive, LFO,
+  delay libre/synchronisé et six presets originaux ; les sliders restent continus.
+- [x] Settings v6, Preset v5 et banque v4 migrent les formats historiques.
+- [x] Le gate réussit 143/143 domaine, 163/163 application, 306/306 JVM, CTest 2/2
+  et 8/8 instrumentés en 28,734 s sur SM-X620/API 36.
+- [x] `0.2.4-dev-performance` est minifiée, installée, compilée ART `speed` et
+  coinstallée avec la dernière V1 ; aucune variante de test ne reste installée.
+- [x] Après stress, le diagnostic audio indique 48 kHz, burst 96, buffer 192, queue
+  0/28 et zéro xrun, événement perdu, reprise ou erreur.
+
+Le stress `gfxinfo` n'est pas un loopback. USB MIDI réel, vrai multi-touch, TalkBack,
+latence tactile/MIDI→audio, 90 Hz soutenu, hotplug et soak 60 minutes restent ouverts.

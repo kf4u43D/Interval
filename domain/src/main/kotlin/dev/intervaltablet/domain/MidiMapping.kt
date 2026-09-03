@@ -107,14 +107,15 @@ fun MidiAction.toInstrumentActions(
         is MidiAction.Chromatic -> listOf(InstrumentAction.PressChromatic(source, semitones, velocity, timestampNanos))
         is MidiAction.UndoThenMove -> listOf(InstrumentAction.UndoThenMove(source, steps, velocity, timestampNanos))
         MidiAction.Undo -> listOf(InstrumentAction.Undo(source, velocity, timestampNanos))
-        MidiAction.Same,
-        MidiAction.SamePitch,
-        -> listOf(InstrumentAction.PressInterval(source, 0, velocity, timestampNanos))
+        MidiAction.Same -> listOf(InstrumentAction.PressSameInterval(source, velocity, timestampNanos))
+        MidiAction.SamePitch -> listOf(InstrumentAction.PressSamePitch(source, velocity, timestampNanos))
+        MidiAction.Random -> listOf(InstrumentAction.PressRandomInterval(source, velocity, timestampNanos))
+        is MidiAction.ChromaticShift -> listOf(
+            InstrumentAction.HoldChromaticShift(source, semitones, timestampNanos),
+        )
         is MidiAction.Home -> listOf(InstrumentAction.Home(source, sound, velocity, timestampNanos))
         is MidiAction.Octave -> listOf(InstrumentAction.PressChromatic(source, octaves * 12, velocity, timestampNanos))
         MidiAction.Panic -> listOf(InstrumentAction.Panic(timestampNanos))
-        MidiAction.Random,
-        is MidiAction.ChromaticShift,
         MidiAction.TogglePassThrough,
         MidiAction.Play,
         MidiAction.Stop,
@@ -123,7 +124,7 @@ fun MidiAction.toInstrumentActions(
     }
 }
 
-internal fun MidiAction.holdsGeneratedNotes(): Boolean {
+internal fun MidiAction.requiresRelease(): Boolean {
     return when (this) {
         is MidiAction.Move,
         is MidiAction.Chromatic,

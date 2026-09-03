@@ -12,6 +12,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import dev.intervaltablet.domain.PadArticulation
 import dev.intervaltablet.domain.PassThroughMode
 import dev.intervaltablet.domain.SynthParameter
+import dev.intervaltablet.domain.SynthLfoDestination
 import dev.intervaltablet.domain.SynthPatch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -24,6 +25,7 @@ private val ROOT = intPreferencesKey("root_pitch_class")
 private val SCALE = stringPreferencesKey("scale_id")
 private val CHORD = stringPreferencesKey("chord_id")
 private val PAD_ARTICULATION = stringPreferencesKey("pad_articulation")
+private val FORCE_TO_SCALE = booleanPreferencesKey("force_to_scale")
 private val PASS_MODE = stringPreferencesKey("pass_through_mode")
 private val RANGE_MIN = intPreferencesKey("range_min")
 private val RANGE_MAX = intPreferencesKey("range_max")
@@ -50,6 +52,18 @@ private val SYNTH_DELAY_FEEDBACK = floatPreferencesKey("synth_delay_feedback")
 private val SYNTH_DELAY_MIX = floatPreferencesKey("synth_delay_mix")
 private val SYNTH_REVERB_MIX = floatPreferencesKey("synth_reverb_mix")
 private val SYNTH_MASTER_GAIN = floatPreferencesKey("synth_master_gain")
+private val SYNTH_FILTER_ATTACK_SECONDS = floatPreferencesKey("synth_filter_attack_seconds")
+private val SYNTH_FILTER_DECAY_SECONDS = floatPreferencesKey("synth_filter_decay_seconds")
+private val SYNTH_FILTER_SUSTAIN = floatPreferencesKey("synth_filter_sustain")
+private val SYNTH_FILTER_RELEASE_SECONDS = floatPreferencesKey("synth_filter_release_seconds")
+private val SYNTH_FILTER_ENV_AMOUNT = floatPreferencesKey("synth_filter_env_amount")
+private val SYNTH_DRIVE = floatPreferencesKey("synth_drive")
+private val SYNTH_LFO_RATE = floatPreferencesKey("synth_lfo_rate")
+private val SYNTH_LFO_DEPTH = floatPreferencesKey("synth_lfo_depth")
+private val SYNTH_LFO_DESTINATION = floatPreferencesKey("synth_lfo_destination")
+private val SYNTH_LFO_DELAY = floatPreferencesKey("synth_lfo_delay")
+private val SYNTH_DELAY_SYNC_BEATS = floatPreferencesKey("synth_delay_sync_beats")
+private val SYNTH_TEMPO_BPM = floatPreferencesKey("synth_tempo_bpm")
 private val WORKING_PRESET = stringPreferencesKey("working_preset_json")
 private val PRESET_BANK = stringPreferencesKey("preset_bank_json")
 private val SELECTED_PRESET_SLOT = intPreferencesKey("selected_preset_slot")
@@ -61,6 +75,7 @@ data class StoredSettings(
     val scaleId: String = "major",
     val chordId: String = "off",
     val padArticulation: PadArticulation = PadArticulation.ARPEGGIATED,
+    val forceToScale: Boolean = false,
     val passThroughMode: PassThroughMode = PassThroughMode.ACTIVE,
     val rangeMin: Int = 36,
     val rangeMax: Int = 95,
@@ -98,9 +113,11 @@ data class StoredSettings(
     }
 }
 
-const val CURRENT_SETTINGS_SCHEMA: Int = 4
+const val CURRENT_SETTINGS_SCHEMA: Int = 6
 private const val PAD_ARTICULATION_SETTINGS_SCHEMA: Int = 3
 private const val SYNTH_PATCH_SETTINGS_SCHEMA: Int = 4
+private const val FORCE_TO_SCALE_SETTINGS_SCHEMA: Int = 5
+private const val EXTENDED_SYNTH_SETTINGS_SCHEMA: Int = 6
 
 /** Pure decoder kept separate from DataStore I/O so migrations and corrupt values are testable. */
 internal fun decodeStoredSettings(preferences: Preferences): StoredSettings {
@@ -124,6 +141,11 @@ internal fun decodeStoredSettings(preferences: Preferences): StoredSettings {
             decodePadArticulation(preferences[PAD_ARTICULATION], storedChordId)
         } else {
             inferLegacyPadArticulation(storedChordId)
+        },
+        forceToScale = if (storedSchema >= FORCE_TO_SCALE_SETTINGS_SCHEMA) {
+            preferences[FORCE_TO_SCALE] ?: false
+        } else {
+            false
         },
         passThroughMode = runCatching {
             PassThroughMode.valueOf(preferences[PASS_MODE] ?: PassThroughMode.ACTIVE.name)
@@ -175,6 +197,56 @@ private fun decodeSynthPatch(preferences: Preferences, storedSchema: Int): Synth
         delayMix = preferences.synthValue(SYNTH_DELAY_MIX, SynthParameter.DELAY_MIX),
         reverbMix = preferences.synthValue(SYNTH_REVERB_MIX, SynthParameter.REVERB_MIX),
         masterGain = preferences.synthValue(SYNTH_MASTER_GAIN, SynthParameter.MASTER),
+        filterAttackSeconds = preferences.extendedSynthValue(
+            SYNTH_FILTER_ATTACK_SECONDS,
+            SynthParameter.FILTER_ATTACK,
+            storedSchema,
+        ),
+        filterDecaySeconds = preferences.extendedSynthValue(
+            SYNTH_FILTER_DECAY_SECONDS,
+            SynthParameter.FILTER_DECAY,
+            storedSchema,
+        ),
+        filterSustain = preferences.extendedSynthValue(
+            SYNTH_FILTER_SUSTAIN,
+            SynthParameter.FILTER_SUSTAIN,
+            storedSchema,
+        ),
+        filterReleaseSeconds = preferences.extendedSynthValue(
+            SYNTH_FILTER_RELEASE_SECONDS,
+            SynthParameter.FILTER_RELEASE,
+            storedSchema,
+        ),
+        filterEnvelopeAmount = preferences.extendedSynthValue(
+            SYNTH_FILTER_ENV_AMOUNT,
+            SynthParameter.FILTER_ENV_AMOUNT,
+            storedSchema,
+        ),
+        drive = preferences.extendedSynthValue(SYNTH_DRIVE, SynthParameter.DRIVE, storedSchema),
+        lfoRateHz = preferences.extendedSynthValue(SYNTH_LFO_RATE, SynthParameter.LFO_RATE, storedSchema),
+        lfoDepth = preferences.extendedSynthValue(SYNTH_LFO_DEPTH, SynthParameter.LFO_DEPTH, storedSchema),
+        lfoDestination = SynthLfoDestination.fromWire(
+            preferences.extendedSynthValue(
+                SYNTH_LFO_DESTINATION,
+                SynthParameter.LFO_DESTINATION,
+                storedSchema,
+            ),
+        ),
+        lfoDelaySeconds = preferences.extendedSynthValue(
+            SYNTH_LFO_DELAY,
+            SynthParameter.LFO_DELAY,
+            storedSchema,
+        ),
+        delaySyncBeats = preferences.extendedSynthValue(
+            SYNTH_DELAY_SYNC_BEATS,
+            SynthParameter.DELAY_SYNC_BEATS,
+            storedSchema,
+        ),
+        tempoBpm = preferences.extendedSynthValue(
+            SYNTH_TEMPO_BPM,
+            SynthParameter.TEMPO_BPM,
+            storedSchema,
+        ),
     )
 }
 
@@ -182,6 +254,16 @@ private fun Preferences.synthValue(
     key: Preferences.Key<Float>,
     parameter: SynthParameter,
 ): Float = parameter.sanitize(this[key] ?: parameter.defaultValue)
+
+private fun Preferences.extendedSynthValue(
+    key: Preferences.Key<Float>,
+    parameter: SynthParameter,
+    storedSchema: Int,
+): Float = if (storedSchema >= EXTENDED_SYNTH_SETTINGS_SCHEMA) {
+    synthValue(key, parameter)
+} else {
+    parameter.defaultValue
+}
 
 private const val MAX_STORED_IDENTIFIER_CHARS: Int = 96
 private const val MAX_STORED_PORT_IDENTITY_CHARS: Int = 512
@@ -211,6 +293,7 @@ internal fun writeStoredSettings(preferences: MutablePreferences, settings: Stor
     preferences[SCALE] = settings.scaleId
     preferences[CHORD] = settings.chordId
     preferences[PAD_ARTICULATION] = settings.padArticulation.toStoredId()
+    preferences[FORCE_TO_SCALE] = settings.forceToScale
     preferences[PASS_MODE] = settings.passThroughMode.name
     preferences[RANGE_MIN] = settings.rangeMin
     preferences[RANGE_MAX] = settings.rangeMax
@@ -240,6 +323,18 @@ internal fun writeStoredSettings(preferences: MutablePreferences, settings: Stor
     preferences[SYNTH_DELAY_MIX] = settings.synthPatch.delayMix
     preferences[SYNTH_REVERB_MIX] = settings.synthPatch.reverbMix
     preferences[SYNTH_MASTER_GAIN] = settings.synthPatch.masterGain
+    preferences[SYNTH_FILTER_ATTACK_SECONDS] = settings.synthPatch.filterAttackSeconds
+    preferences[SYNTH_FILTER_DECAY_SECONDS] = settings.synthPatch.filterDecaySeconds
+    preferences[SYNTH_FILTER_SUSTAIN] = settings.synthPatch.filterSustain
+    preferences[SYNTH_FILTER_RELEASE_SECONDS] = settings.synthPatch.filterReleaseSeconds
+    preferences[SYNTH_FILTER_ENV_AMOUNT] = settings.synthPatch.filterEnvelopeAmount
+    preferences[SYNTH_DRIVE] = settings.synthPatch.drive
+    preferences[SYNTH_LFO_RATE] = settings.synthPatch.lfoRateHz
+    preferences[SYNTH_LFO_DEPTH] = settings.synthPatch.lfoDepth
+    preferences[SYNTH_LFO_DESTINATION] = settings.synthPatch.lfoDestination.wireValue
+    preferences[SYNTH_LFO_DELAY] = settings.synthPatch.lfoDelaySeconds
+    preferences[SYNTH_DELAY_SYNC_BEATS] = settings.synthPatch.delaySyncBeats
+    preferences[SYNTH_TEMPO_BPM] = settings.synthPatch.tempoBpm
 
     val workingPreset = settings.workingPreset ?: settings.toWorkingPresetSnapshot()
     preferences[WORKING_PRESET] = PerformancePresetSerializer.encode(workingPreset)
@@ -263,6 +358,7 @@ private fun StoredSettings.toWorkingPresetSnapshot(): PerformancePresetSnapshot 
             scaleId = scaleId,
             chordId = chordId,
             padArticulation = padArticulation,
+            forceToScale = forceToScale,
             rangeMin = rangeMin,
             rangeMax = rangeMax,
             solfegeWrap = solfegeWrap,

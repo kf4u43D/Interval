@@ -106,6 +106,16 @@ class SettingsRepositoryMigrationTest {
     }
 
     @Test
+    fun schemaFourDefaultsForceToScaleOffEvenIfAForwardKeyIsPresent() {
+        val preferences = mutablePreferencesOf(
+            intPreferencesKey("schema_version") to 4,
+            booleanPreferencesKey("force_to_scale") to true,
+        )
+
+        assertFalse(decodeStoredSettings(preferences).forceToScale)
+    }
+
+    @Test
     fun corruptGateTwoPayloadsFallBackIndependentlyToLegacySnapshot() {
         val preferences = mutablePreferencesOf(
             intPreferencesKey("schema_version") to CURRENT_SETTINGS_SCHEMA,
@@ -133,6 +143,7 @@ class SettingsRepositoryMigrationTest {
             stringPreferencesKey("scale_id") to "minor",
             stringPreferencesKey("chord_id") to "fifth",
             stringPreferencesKey("pad_articulation") to "muted",
+            booleanPreferencesKey("force_to_scale") to true,
             stringPreferencesKey("pass_through_mode") to PassThroughMode.PASS_THRU.name,
             intPreferencesKey("range_min") to 0,
             intPreferencesKey("range_max") to 127,
@@ -167,6 +178,8 @@ class SettingsRepositoryMigrationTest {
         assertEquals("minor", decoded.scaleId)
         assertEquals("fifth", decoded.chordId)
         assertEquals(PadArticulation.MUTED, decoded.padArticulation)
+        assertTrue(decoded.forceToScale)
+        assertTrue(requireNotNull(decoded.workingPreset).musicalContext.forceToScale)
         assertEquals(PassThroughMode.PASS_THRU, decoded.passThroughMode)
         assertEquals(0, decoded.rangeMin)
         assertEquals(127, decoded.rangeMax)
@@ -197,8 +210,8 @@ class SettingsRepositoryMigrationTest {
             ),
             decoded.synthPatch,
         )
-        assertEquals("Working Session", decoded.workingPreset?.name)
-        assertEquals(DefaultMidiMap.mapping, decoded.workingPreset?.midiMapping)
+        assertEquals("Working Session", decoded.workingPreset.name)
+        assertEquals(DefaultMidiMap.mapping, decoded.workingPreset.midiMapping)
         assertEquals(PresetBank(), decoded.presetBank)
     }
 
@@ -318,8 +331,8 @@ class SettingsRepositoryMigrationTest {
         val rewritten = mutablePreferencesOf()
         writeStoredSettings(rewritten, migrated)
         assertEquals(CURRENT_SETTINGS_SCHEMA, rewritten[intPreferencesKey("schema_version")])
-        assertTrue(requireNotNull(rewritten[stringPreferencesKey("working_preset_json")]).contains("\"schemaVersion\":3"))
-        assertTrue(requireNotNull(rewritten[stringPreferencesKey("preset_bank_json")]).contains("\"schemaVersion\":2"))
+        assertTrue(requireNotNull(rewritten[stringPreferencesKey("working_preset_json")]).contains("\"schemaVersion\":5"))
+        assertTrue(requireNotNull(rewritten[stringPreferencesKey("preset_bank_json")]).contains("\"schemaVersion\":4"))
         assertEquals(migrated, decodeStoredSettings(rewritten))
     }
 
@@ -331,6 +344,7 @@ class SettingsRepositoryMigrationTest {
                 rootPitchClass = 5,
                 scaleId = "blues",
                 padArticulation = PadArticulation.MUTED,
+                forceToScale = true,
             ),
             routing = RoutingSnapshot(outputChannel = 6),
             toneRow = ToneRowSnapshot(
@@ -349,6 +363,7 @@ class SettingsRepositoryMigrationTest {
             scaleId = "blues",
             outputChannel = 6,
             padArticulation = PadArticulation.MUTED,
+            forceToScale = true,
             synthPatch = SynthPatch(
                 sawMix = 0.10f,
                 pulseMix = 0.80f,

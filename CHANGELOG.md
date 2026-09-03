@@ -4,17 +4,50 @@
 
 ### Added
 
-- Dépôt Git local initialisé sur `main` et Gradle Wrapper officiel 8.13 ajouté avec JAR et
-  distribution protégés par leurs empreintes SHA-256 ; aucun remote ni publication.
+- Script PowerShell V2.4 prêt à l'emploi pour gate, vérifications Git anti-divergence,
+  push sans force et création/ouverture de Pull Request, avec dry-run local et auto-merge
+  strictement optionnel via GitHub CLI.
+- Étape 8/V2.4 : barre supérieure unifiée et pages Interval, MIDI, Synthé et
+  Arpégiateur ; strummer vertical trois octaves et scène à deux mains en trois zones.
+- Changement de gamme atomique sur les pads maintenus, configuration d’arpège
+  ordre/octaves/motif huit pas/gate, BPM et signature rythmique persistés.
+- Synthé plein écran porté à 28 paramètres avec ADSR filtre, drive, LFO assignable,
+  delay synchronisable et six presets originaux embarqués.
+- Settings v6, preset musical v5 et banque v4 avec migrations historiques.
+- Étape 7/V2.3 : treize boutons de gammes permanents dans la zone main gauche, accords
+  et articulations appliqués dès le touch-down avec sémantiques accessibles conservées.
+- Arpège autonome par pad maintenu, cadencé par le tempo/division sans transport ni
+  Tone Row, avec curseur/ownership par source et revoicing immédiat lors de SetChord.
+- Variante Performance `0.2.3-dev-performance` validée 300/300 JVM, CTest 2/2, cinq
+  Lint, 8/8 instrumentés sur SM-X620 et installée AOT `speed` aux côtés de la V1.
+
+- Dépôt Git local initialisé sur `main`, remote `origin` configuré et Gradle Wrapper
+  officiel 8.13 ajouté avec JAR et distribution protégés par leurs empreintes SHA-256.
 - Workspace VS Code/Codex et documentation d’architecture.
 - Socle Kotlin pur pour navigation intervallique, accords et routage MIDI.
 - UI Compose de performance et adaptateurs Android de départ.
 - Moteur audio Oboe/DSP minimal et tests natifs hôte.
-- Trois étapes Codex autonomes avec critères d’acceptation.
+- Cinq étapes Codex autonomes avec critères d’acceptation.
+- Sixième étape Codex pour l’ergonomie deux mains et la réduction de la régression de
+  latence, avec plan, critères et preuve SM-X620.
+- Variante V2.2 `performance` minifiée, coinstallable avec la V1, signée localement et
+  compilée avec le moteur natif Release.
+- V2.1 coinstallable `0.2.1-dev-instrumented` nommée « Interval Tablet V2 », sans
+  remplacement du package V1.
+- Force to Scale déterministe, treize gammes standards 12-TET et persistance
+  Settings v5/Preset v4/banque v3 avec migrations historiques.
+- Surface harmonique permanente : dix variantes d’accords en deux rangées et gammes
+  accessibles directement sur la page de performance.
 - Parseur MIDI incrémental testé : running status, temps réel intercalé, SysEx et messages fragmentés.
 - Audit de structure portable et compilation hôte du pont JNI/Oboe contre stubs.
 - Traçabilité vers le guide utilisateur, protocole matériel et rapport de vérification.
-- CI GitHub Actions, Dependabot et procédure d’initialisation du futur dépôt.
+- CI GitHub Actions, Dependabot et procédure de protection/configuration du dépôt.
+- Reducer pur d'éditeur MIDI Learn avec baseline, brouillon, capture Note/CC, canal reçu
+  ou Omni, seuil CC, collision exacte, recouvrement Omni et commit atomique.
+- Panneau MIDI Learn dédié avec états attente/candidat/conflit, ajout/remplacement,
+  suppression, reset, Save et Cancel.
+- Quatre parcours Tone Row supplémentaires : Auto-Transpose haut/bas et Auto-Translate
+  haut/bas, portant le total à huit.
 - Prévisualisation pure des déplacements, degré courant et indications de limite
   clamp/wrap pour l'interface de performance.
 - Repository Android MIDI injectable avec catalogue de ports, états de connexion,
@@ -61,6 +94,22 @@
 
 ### Changed
 
+- `Audio-` devient un bouton Mute explicite ; MIDI In/Out et MIDI Learn sont réunis
+  dans la page MIDI. Force to Scale reste une quantification optionnelle des notes
+  générées et ne modifie toujours pas PassThru.
+- Le gate d’arpège libère uniquement la voix courante ; la session de pad demeure tenue
+  jusqu’au Release/Panic. Une reconfiguration d’arpège ne retrigger pas les accords plaqués.
+- Scène de jeu réorganisée à deux mains en portrait et en paysage : harmonie, Force to
+  Scale, dix accords et strummer à gauche ; utilitaires et intervalles à droite.
+- Acteur musical placé sur un thread mono-thread possédé, nommé et prioritaire audio ;
+  la variante instrumentée n’est plus utilisée comme application de jeu.
+- Articulations compactées en grille 2×2 afin de préserver des cibles tactiles de 48 dp
+  et la hauteur du strummer.
+- Pads portrait compactés avec cible minimale de 48 dp et zone de grille plafonnée ; le
+  Strummer horizontal utilise une hauteur réduite.
+- Panneau Synthé complété avec trois contrôles distincts pour le temps, le feedback et le
+  mix du delay, tous prévisualisés pendant le geste puis persistés au relâchement.
+
 - Domaine musical finalisé pour la porte 1 : mouvements `-14…+14`, ancre hors gamme,
   wrap/clamp, Home, Undo, changements de contexte et invariants de note range.
 - Accords rendus symétriques par instance, avec doublures conservées, vélocités bornées et
@@ -72,8 +121,22 @@
 - Écran de performance rendu tolérant aux tailles compactes et aux recréations sans
   reproduire l'apparence du matériel de référence.
 - Dépendances Android alignées sur la ligne compatible compile/target SDK 36.
-- Les actions mappées Random, ChromaticShift, Play, Stop et Record rejoignent désormais
-  le même reducer Tone Row que la surface tactile.
+- Random mappé joue désormais immédiatement un intervalle déterministe `-14…+14` dans le
+  reducer d'instrument ; il ne sélectionne plus le mode Random Tone Row.
+- Chromatic Shift mappé devient un modificateur silencieux et momentané, possédé par sa
+  Note ou son gate CC jusqu'au relâchement, à la purge ou au Panic.
+- Same Interval répète le dernier mouvement diatonique, tandis que Same Pitch répète le
+  dernier écart chromatique réellement entendu.
+- Play, Stop et Record restent reliés au reducer Tone Row ; un second Record annule la
+  prise en cours.
+- La lecture manuelle Tone Row reste disponible en Pause. Une Note MIDI fournit une
+  vélocité live pour l'émission sans modifier l'entrée enregistrée.
+- Random Tone Row part du premier élément et conserve le signe du pas demandé avec une
+  magnitude `0…2×|pas|` ; les modes Auto accumulent leur demi-ton/degré par cycle.
+- La capture Learn est interceptée avant politique Program/Song Select et routage ; seul
+  Save remplace/persiste le mapping courant, tandis que Cancel jette le brouillon.
+- Mapping v1 est conservé ; les presets existants ne changent qu'après resauvegarde
+  explicite de leur slot.
 - Les notes Tone Row passent par `PressAbsolute`, le voicing et le registre d'ownership
   existants ; l'horloge et les releases planifiées reviennent dans la mailbox applicative.
 - Les snapshots restaurent contenu, contexte, mapping, routage et options, mais jamais
@@ -105,6 +168,18 @@
 
 ### Fixed
 
+- Régression de latence de la V2.1 de test : livraison R8/AOT dédiée et chemin musical
+  découplé de la compétition du pool générique.
+- Compression du strummer paysage à 22 dp et panneau MIDI Learn trop court ; la surface
+  harmonique latérale libère désormais une vraie zone de jeu et de défilement.
+- Same Pitch calcule désormais depuis l'ancre non shiftée puis compose exactement le
+  Chromatic Shift courant : les cas stable, ajouté et relâché conservent la hauteur
+  attendue ; une Note externe entendue devient aussi la référence du delta suivant.
+- `UndoThenMove` devient le dernier déplacement répétable par Same Interval. Les leases
+  Shift Note/CC survivent au remplacement du mapping jusqu'à leurs releases d'origine.
+- Play Once comptabilise sa dernière émission comme fin du cycle logique avant le retour
+  manuel ; Auto-Transpose/Auto-Translate accumulent donc leur ±1 terminal, tandis que
+  Restart et Reset restaurent les accumulations documentées.
 - Diagnostic Windows : Ninja fourni par CMake 3.22.1 dans le SDK Android est désormais
   accepté même s'il n'est pas inscrit dans le `PATH` global ; le diagnostic Unix applique
   la même recherche de repli.
@@ -178,7 +253,61 @@
 - Panneau synthé désactivé jusqu'au chargement DataStore afin qu'aucun draft affiché ne
   puisse diverger silencieusement de l'état appliqué et persistant.
 
+### Deferred
+
+- Rest, Random Step et Ratchet dans les séquences ; Ratchet attend un scheduler de
+  retrigger annulable par génération.
+- Émission MIDI Clock/Start/Stop/Continue et Song Position Pointer.
+- Actions mappées de gamme/clé/accord/preset, CC relatifs/continus, profils et
+  import/export.
+- Gammes personnalisées/scopes de presets, optimisation soutenue à 90 Hz et certification
+  USB MIDI/Learn, TalkBack, vrai multi-touch, loopback/hotplug et soak.
+
 ### Verified
+
+- Gate Stage 8/V2.4 : 143/143 domaine, 163/163 application, 8/8 instrumentés sur
+  SM-X620/API 36 et CTest 2/2. L’APK Performance de 9 276 296 octets, SHA-256
+  `ECDDE9FC6E4FBD0811EDA0C24CAB847281599C5A7C94EC785DCBB6D539FC2A82`, est installée
+  avec la V1 et compilée ART `speed`. Diagnostic : 48 kHz, burst 96, buffer 192,
+  queue 0/28, zéro xrun/drop/reprise/erreur.
+- Stress 108 frappes V2.4 : p50 16 ms, p90/p95 20 ms et p99 21 ms ; cette mesure
+  `gfxinfo` n’est pas une mesure loopback tactile→audio/MIDI.
+- Gate Stage 6/V2.2 : 136/136 domaine, 161/161 application, 8/8 instrumentés sur
+  SM-X620, CTest 2/2, cinq Lint sans issue, tous les assemblages et quatre ABI.
+- Stress V2.2 Performance de 108 frappes : p50 14 ms, p90 17 ms, p95 18 ms, p99 19 ms,
+  12/121 signaux de forte latence d’entrée ; audio 48 kHz, burst 96, buffer 192,
+  queue 0/16, zéro xrun/drop/reprise/erreur. Ce test n’est pas un loopback acoustique.
+- APK `app-performance.apk` final : 9 227 116 octets, SHA-256
+  `CD708425DEC4671AD3DAC43F5B699A8C3FB9EE555DF994A79030231F33E7AE14`, installé et
+  compilé ART `speed`; seules V1 et V2.2 restent sur la tablette.
+- Gate Stage 5/V2.1 : 136/136 tests domaine sur 12 suites et 161/161 tests application
+  sur 19 suites, soit 297/297 ; CTest 2/2, quatre Lint sans issue, tous les assemblages et
+  runtimes natifs des quatre ABI validés.
+- Réception directe SM-X620/API 36 : 7/7 en 17,279 s, incluant accords/Force to Scale,
+  pads compacts et gestes du temps/feedback delay. Seuls les packages V1 et V2.1 restent
+  installés après retrait de l’APK de test.
+
+- Gate Stage 4/V2 final du 1er septembre sur le commit
+  `13c2d7c4915e8da65c5e6898daf8ee9a5f253e75` : 131/131 tests domaine sur 11 suites et
+  160/160 tests application sur 19 suites, soit 291/291 sans échec, erreur ni test ignoré ;
+  CTest 2/2.
+- `doctor.ps1` termine avec 0 erreur et un avertissement attendu pour `kotlinc` absent ;
+  `verify-structure.ps1` et `verify.ps1` sont verts, avec quatre ABI contrôlées. Les Lint
+  Debug, Release, Benchmark et Instrumented rendent tous `No issues found.` ; gate
+  principal, variantes et AndroidTest réussissent.
+- Suite directe finale SM-X620/API 36 : 7/7 en 15,603 s, couvrant MIDI Learn
+  conflit→Replace→Save/Cancel, sliders Synthé, pads, Tone Row et dix cycles audio
+  start/stop. Cette réception UI ne vaut pas capture Learn depuis un périphérique USB.
+- Artefacts V2 finaux : Debug 40 596 619 octets
+  (`744f5a08af37861eaecdb8c3b2a7a47b2dda68283929a50d08c3849ee9db5dc4`), Release non
+  signé 9 199 584 (`c91874fb5628f9484673a089287515c27bc3074da74848dc3192ed3bcf971ed8`),
+  Benchmark 9 207 816 (`87b2b48693d19c82bfaf6929695cc645a2a61bf2818780aa434eb603c364ffe2`),
+  Instrumented 40 317 773 (`43adb0eb7a518367c0ce313f62f323217855b55d320609b7fd57c13f82aed029`)
+  et AndroidTest 2 543 071 (`e78d057e92eeb42085643c098adf476147abf96d0f4e15e64afeee6fd47e711f`).
+
+Les entrées suivantes conservent, comme archives datées, les preuves successives des
+portes 1 à 3 et de la clôture MVP antérieure à la V2 ; leurs totaux ne remplacent pas le
+gate final 291/291 ci-dessus.
 
 - Gate Gradle de la porte 1 réussi : 41 tests domaine et 42 tests JVM application, sans
   échec, puis lint et assemblage debug.
